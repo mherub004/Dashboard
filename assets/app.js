@@ -1,0 +1,228 @@
+(() => {
+  "use strict";
+  const $ = s => document.querySelector(s);
+  const $$ = s => [...document.querySelectorAll(s)];
+  const state = { authenticated: false, data: null, view: "overview", history: [], busy: false, draft: null, tab: "websites", connection: null };
+  let poll, toastTimer;
+  const escape = v => String(v ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+  const bytes = value => {
+    if (value == null || !Number.isFinite(Number(value))) return "—";
+    let n = Number(value), i = 0; const units = ["B", "KB", "MB", "GB", "TB"];
+    while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    return (i ? n.toFixed(n >= 100 ? 0 : 1) : n.toFixed(0)) + " " + units[i];
+  };
+  const duration = seconds => {
+    const d = Math.floor(seconds / 86400), h = Math.floor(seconds / 3600) % 24, m = Math.floor(seconds / 60) % 60;
+    return d ? d + "d " + h + "h" : h ? h + "h " + m + "m" : m + "m";
+  };
+  const tone = s => ["Online", "running", "Operational"].includes(s) ? "" : ["Offline", "exited", "dead"].includes(s) ? "offline" : "degraded";
+  const status = s => '<span class="status ' + tone(s) + '"><i class="dot ' + tone(s) + '"></i>' + escape(s) + "</span>";
+  const empty = text => '<div class="empty">' + escape(text) + "</div>";
+  const show = id => { const dialog = $(id); if (!dialog.open) dialog.showModal(); };
+  const toast = message => { $("#toast").textContent = message; $("#toast").classList.add("visible"); clearTimeout(toastTimer); toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), 3500); };
+  async function api(path, options = {}) {
+    const response = await fetch("/api/" + path, { ...options, credentials: "same-origin", headers: { ...(options.body ? { "Content-Type": "application/json" } : {}), ...options.headers } });
+    let data; try { data = await response.json(); } catch { throw new Error("The dashboard API is unavailable. Please try again."); }
+    if (!response.ok) { const error = new Error(data.detail || "The request could not be completed."); error.status = response.status; throw error; }
+    return data;
+  }
+  function signInScreen() {
+    state.authenticated = false; clearTimeout(poll);
+    $$("dialog[open]").forEach(d => d.close());
+    $("#loginForm").elements.password.value = "";
+    $("#loginError").textContent = "";
+    show("#loginDialog");
+  }
+  async function refresh() {
+    clearTimeout(poll);
+    if (!state.authenticated || state.busy || document.hidden) return;
+    state.busy = true;
+    $("#refresh").disabled = true;
+    try {
+      const data = await api("overview");
+      state.data = data; render();
+      $("#pageError").classList.add("hidden");
+      $("#lastUpdated").textContent = "Updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      $("#syncDot").className = "dot"; $("#syncLabel").textContent = "SYNCED";
+    } catch (error) {
+      if (error.status === 401) { location.reload(); return; }
+      $("#pageError").textContent = error.message; $("#pageError").classList.remove("hidden");
+      $("#syncDot").className = "dot offline"; $("#syncLabel").textContent = "OFFLINE";
+      $("#lastUpdated").textContent = "Sync unavailable";
+    } finally {
+      state.busy = false; $("#refresh").disabled = false;
+      if (state.authenticated) poll = setTimeout(refresh, 15000);
+    }
+  }
+  function render() {
+    const d = state.data; if (!d) return;
+    const h = d.host, connected = d.agent_connected;
+    $("#connectionLabel").textContent = connected ? "Server connected" : d.received_at ? "Server report is stale" : "Connect your server";
+    $("#connectionSub").textContent = connected ? "Live telemetry active" : d.received_at ? "Check the agent on your host" : "Ready when you are";
+    $("#serverDot").className = "dot " + (connected ? "" : d.received_at ? "offline" : "neutral");
+    $("#agentBanner").classList.toggle("hidden", connected);
+    $("#bannerTitle").textContent = d.received_at ? "Your server has stopped reporting" : "Bring your server into the picture";
+    $("#bannerText").textContent = d.received_at ? "Last report: " + new Date(d.received_at * 1000).toLocaleString() + ". Values below are from that report." : "Connect the lightweight agent to see live CPU, memory, network and Docker metrics.";
+    $("#cpuValue").innerHTML = (h ? Number(h.cpu).toFixed(1) : "—") + "<small>%</small>";
+    $("#memoryValue").innerHTML = (h ? Number(h.memory).toFixed(1) : "—") + "<small>%</small>";
+    $("#cpuContext").textContent = h ? h.name + (connected ? " · live" : " · last report") : "Waiting for your server";
+    $("#memoryContext").textContent = h ? bytes(h.memory_used) + " of " + bytes(h.memory_total) : "Waiting for your server";
+    $("#cpuBar").style.width = (h?.cpu || 0) + "%"; $("#memoryBar").style.width = (h?.memory || 0) + "%";
+    $("#downValue").textContent = h ? bytes(h.network.down) : "—"; $("#upValue").textContent = h ? bytes(h.network.up) : "—";
+    $("#networkBar").style.width = h ? Math.min(100, (h.network.up + h.network.down) / 20000) + "%" : "0%";
+    $("#uptimeValue").textContent = h ? duration(h.uptime) : "—";
+    $("#hostName").textContent = h ? h.name : "No server connected"; $("#uptimeBar").style.width = connected ? "100%" : "0%";
+    if (h && connected && !state.history.some(p => p.at === d.received_at)) {
+      state.history.push({ at: d.received_at, cpu: h.cpu, memory: h.memory }); if (state.history.length > 60) state.history.shift();
+    }
+    $("#chartEmpty").classList.toggle("hidden", state.history.length > 0);
+    $("#chartNote").textContent = h ? bytes(h.disk_used) + " of " + bytes(h.disk_total) + " disk used · " + h.disk.toFixed(0) + "% · network: " + (h.network.interfaces || "host") : "Connect your server to start collecting telemetry.";
+    if (state.history.length) $("#chartStart").textContent = new Date(state.history[0].at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    drawChart();
+    const sites = d.websites || [], up = sites.filter(s => s.status === "Online").length;
+    $("#siteCount").textContent = sites.length;
+    $("#healthPercent").textContent = sites.length ? Math.round(up / sites.length * 100) + "%" : "—";
+    $("#healthRing").style.strokeDashoffset = sites.length ? 195 - up / sites.length * 195 : 195;
+    $("#healthCount").textContent = sites.length ? up + " of " + sites.length + " online" : "No websites yet";
+    $("#healthList").innerHTML = sites.length ? sites.slice(0, 4).map(s => '<div class="health-row"><i class="dot ' + tone(s.status) + '"></i><span class="site-name">' + escape(s.name) + '</span><span class="latency">' + (s.latency == null ? "No response" : s.latency + " ms") + "</span></div>").join("") : empty("Add your first website to start monitoring.");
+    const containers = d.containers || [];
+    $("#containerCount").textContent = containers.length;
+    $("#containerList").innerHTML = containers.length ? containers.slice(0, 4).map(c => '<div class="container-row"><span class="name"><i class="dot ' + tone(c.status) + '"></i>' + escape(c.name) + "</span>" + status(c.status) + '<span class="usage">' + (c.stats_available ? c.cpu.toFixed(1) + "% · " + bytes(c.memory) : "—") + "</span></div>").join("") : empty(connected ? d.docker_available ? "No Docker containers found." : "Docker socket is unavailable. Check DOCKER_GID." : "Connect your agent to see containers.");
+    $("#dockerStatus").textContent = connected ? d.docker_available ? containers.filter(c => c.status === "running").length + " running · " + containers.length + " total" : "Docker access unavailable" : "Awaiting current server data";
+    const services = d.services || [];
+    $("#serviceList").innerHTML = services.length ? services.slice(0, 4).map((s, i) => '<div class="service-row"><span class="service-icon">' + ["✳", "◈", "◌", "◇"][i % 4] + "</span><div><b>" + escape(s.name) + "</b><small>" + escape(s.description) + "</small></div>" + status(s.status) + "</div>").join("") : empty("Add the services behind your infrastructure.");
+    renderList();
+  }
+  function drawChart() {
+    const canvas = $("#chart"), rect = canvas.getBoundingClientRect(); if (!rect.width || !rect.height) return;
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(rect.width * ratio); canvas.height = Math.floor(rect.height * ratio);
+    const ctx = canvas.getContext("2d"); ctx.scale(ratio, ratio);
+    for (const [key, color] of [["cpu", "#f29387"], ["memory", "#b89cf6"]]) {
+      ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2; ctx.lineJoin = "round";
+      const points = state.history.map((p, i) => [state.history.length === 1 ? rect.width / 2 : i / (state.history.length - 1) * rect.width, 2 + (1 - p[key] / 100) * (rect.height - 4)]);
+      if (points.length === 1) { ctx.beginPath(); ctx.arc(points[0][0], points[0][1], 3, 0, Math.PI * 2); ctx.fill(); }
+      else { ctx.beginPath(); points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); }
+    }
+  }
+  function setView() {
+    const view = location.hash.slice(1);
+    state.view = ["websites", "containers", "services"].includes(view) ? view : "overview";
+    const titles = { overview: "Overview", websites: "Websites & domains", containers: "Docker containers", services: "Services" };
+    $$(".nav-item").forEach(a => a.classList.toggle("active", a.dataset.view === state.view));
+    $("#crumb").textContent = titles[state.view];
+    $("#pageTitle").innerHTML = state.view === "overview" ? "Your infrastructure, <span>in focus.</span>" : escape(titles[state.view]) + " <span>at a glance.</span>";
+    $("#pageSubtitle").textContent = state.view === "overview" ? "Everything running behind your work. Right now." : { websites: "Know when your websites are reachable.", containers: "A clear view of every workload on your server.", services: "Keep your infrastructure services organized." }[state.view];
+    $("#overviewView").classList.toggle("hidden", state.view !== "overview"); $("#listView").classList.toggle("hidden", state.view === "overview");
+    $("#sidebar").classList.remove("open"); $("#mobileMenu").setAttribute("aria-expanded", "false");
+    renderList(); requestAnimationFrame(drawChart);
+  }
+  function renderList() {
+    if (state.view === "overview") return;
+    const config = {
+      websites: ["MONITORED ENDPOINTS", "Websites & domains", "Public HTTP checks run while this dashboard is open.", "＋ Add website"],
+      containers: ["DOCKER RUNTIME", "Containers", "Container status and resource usage from your latest server report.", ""],
+      services: ["YOUR STACK", "Services", "Service descriptions and status are managed by you.", "＋ Add service"]
+    }[state.view];
+    $("#listKicker").textContent = config[0]; $("#listTitle").textContent = config[1]; $("#listDescription").textContent = config[2]; $("#listAdd").textContent = config[3]; $("#listAdd").classList.toggle("hidden", !config[3]);
+    const rows = state.data?.[state.view] || [];
+    if (!rows.length) { $("#listTable").innerHTML = empty(state.view === "containers" ? "No containers to display. Connect your agent and check Docker access." : "Nothing here yet. Add your first entry."); return; }
+    const headings = state.view === "websites" ? ["NAME", "ADDRESS", "STATUS", "RESPONSE"] : state.view === "containers" ? ["CONTAINER", "IMAGE", "STATUS", "RESOURCES"] : ["NAME", "DESCRIPTION", "STATUS"];
+    $("#listTable").innerHTML = "<table><thead><tr>" + headings.map(h => "<th>" + h + "</th>").join("") + "</tr></thead><tbody>" + rows.map(r => {
+      const details = state.view === "websites" ? '<a href="' + escape(r.url) + '" target="_blank" rel="noopener noreferrer">' + escape(r.url) + "</a>" : escape(state.view === "containers" ? r.image : r.description);
+      const extra = state.view === "websites" ? (r.code ? "HTTP " + r.code : "—") + (r.latency != null ? " · " + r.latency + " ms" : "") : r.stats_available ? r.cpu.toFixed(1) + "% · " + bytes(r.memory) : "—";
+      return "<tr><td>" + escape(r.name) + '</td><td class="table-url">' + details + "</td><td>" + status(r.status) + "</td>" + (state.view !== "services" ? "<td>" + extra + "</td>" : "") + "</tr>";
+    }).join("") + "</tbody></table>";
+  }
+  async function openEditor(tab = "websites") {
+    try {
+      state.draft = await api("config"); state.tab = tab;
+      $("#editorError").textContent = ""; drawEditor(); show("#editorDialog");
+    } catch (error) { toast(error.message); }
+  }
+  function readDraft() {
+    state.draft[state.tab] = $$("#editorRows .editor-row").map(row => {
+      const values = Object.fromEntries([...row.querySelectorAll("[data-field]")].map(input => [input.dataset.field, input.value]));
+      return values;
+    });
+  }
+  function drawEditor() {
+    $$(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === state.tab));
+    $("#editorAdd").textContent = state.tab === "websites" ? "＋ Add website" : "＋ Add service";
+    $("#editorRows").innerHTML = state.draft[state.tab].map((entry, i) => {
+      const website = state.tab === "websites", options = website ? ["Website", "Domain"] : ["Operational", "Maintenance", "Degraded"];
+      return '<div class="editor-row"><label>Name<input data-field="name" value="' + escape(entry.name) + '" maxlength="80" required></label><label>' + (website ? "Website address" : "Description") + '<input data-field="' + (website ? "url" : "description") + '" value="' + escape(website ? entry.url : entry.description) + '" ' + (website ? 'type="url" placeholder="https://example.com" required' : 'maxlength="160"') + "></label><label>" + (website ? "Type" : "Status") + '<select data-field="' + (website ? "kind" : "status") + '">' + options.map(o => "<option" + ((website ? entry.kind : entry.status) === o ? " selected" : "") + ">" + o + "</option>").join("") + '</select></label><button class="remove-row" type="button" data-remove="' + i + '" aria-label="Remove ' + escape(entry.name || "entry") + '">×</button></div>';
+    }).join("");
+  }
+  async function openConnection() {
+    try {
+      state.connection = await api("connection"); $("#agentToken").value = state.connection.agent_token || "";
+      show("#connectDialog");
+    } catch (error) { toast(error.message); }
+  }
+  $("#loginDialog").addEventListener("cancel", event => event.preventDefault());
+  $("#loginForm").addEventListener("submit", async event => {
+    event.preventDefault(); const form = event.currentTarget, button = form.querySelector("button");
+    button.disabled = true; $("#loginError").textContent = "";
+    try {
+      await api("login", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+      form.elements.password.value = ""; state.authenticated = true; $("#loginDialog").close(); await refresh();
+    } catch (error) { $("#loginError").textContent = error.message; }
+    finally { button.disabled = false; }
+  });
+  $("#editorForm").addEventListener("submit", async event => {
+    event.preventDefault(); readDraft(); const button = event.currentTarget.querySelector('button[type="submit"]');
+    button.disabled = true; $("#editorError").textContent = "";
+    try { await api("config", { method: "PUT", body: JSON.stringify(state.draft) }); $("#editorDialog").close(); toast("Workspace setup saved"); await refresh(); }
+    catch (error) { $("#editorError").textContent = error.message; }
+    finally { button.disabled = false; }
+  });
+  $("#editorAdd").addEventListener("click", () => {
+    readDraft(); state.draft[state.tab].push(state.tab === "websites" ? { name: "", url: "", kind: "Website" } : { name: "", description: "", status: "Operational" });
+    drawEditor(); $("#editorRows").lastElementChild?.querySelector("input")?.focus();
+  });
+  $("#editorRows").addEventListener("click", event => {
+    const remove = event.target.closest("[data-remove]"); if (!remove) return;
+    readDraft(); state.draft[state.tab].splice(Number(remove.dataset.remove), 1); drawEditor();
+  });
+  $$(".tab").forEach(tab => tab.addEventListener("click", () => { readDraft(); state.tab = tab.dataset.tab; drawEditor(); }));
+  $("#addService").addEventListener("click", () => openEditor("services"));
+  $("#listAdd").addEventListener("click", () => openEditor(state.view === "services" ? "services" : "websites"));
+  $("#copyAgent").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText("DASHBOARD_URL=" + state.connection.dashboard_url + "\nAGENT_TOKEN=" + state.connection.agent_token + "\n");
+      toast("Connection settings copied");
+    } catch { toast("Copy unavailable. Your token is selected for manual copying."); $("#agentToken").type = "text"; $("#agentToken").select(); }
+  });
+  $("#connectDialog").addEventListener("close", () => { state.connection = null; $("#agentToken").value = ""; $("#agentToken").type = "password"; });
+  $("#passwordForm").addEventListener("submit", async event => {
+    event.preventDefault(); const form = event.currentTarget, data = Object.fromEntries(new FormData(form)), button = form.querySelector("button");
+    $("#passwordError").textContent = "";
+    if (data.new_password !== data.confirm_password) { $("#passwordError").textContent = "The new passwords do not match."; return; }
+    button.disabled = true;
+    try { await api("password", { method: "POST", body: JSON.stringify(data) }); form.reset(); location.reload(); }
+    catch (error) { $("#passwordError").textContent = error.message; }
+    finally { button.disabled = false; }
+  });
+  $("#logout").addEventListener("click", async () => {
+    try { await api("logout", { method: "POST", body: "{}" }); location.reload(); }
+    catch (error) { toast(error.message); }
+  });
+  document.addEventListener("click", event => {
+    const close = event.target.closest("[data-close]"); if (close) close.closest("dialog").close();
+    const action = event.target.closest("[data-action]")?.dataset.action;
+    if (action === "manage") openEditor();
+    if (action === "connect") openConnection();
+    if (action === "account") { $("#passwordError").textContent = ""; $("#passwordForm").reset(); show("#accountDialog"); }
+  });
+  $("#refresh").addEventListener("click", refresh);
+  $("#mobileMenu").addEventListener("click", () => { const open = $("#sidebar").classList.toggle("open"); $("#mobileMenu").setAttribute("aria-expanded", String(open)); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); else clearTimeout(poll); });
+  window.addEventListener("resize", drawChart); window.addEventListener("hashchange", setView);
+  $("#today").textContent = new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(new Date()).toUpperCase();
+  setView();
+  (async () => {
+    try { const user = await api("session"); if (user.authenticated) { state.authenticated = true; await refresh(); } else signInScreen(); }
+    catch (error) { signInScreen(); $("#loginError").textContent = error.message; }
+  })();
+})();

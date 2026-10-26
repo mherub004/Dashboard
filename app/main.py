@@ -1,0 +1,151 @@
+"""Outbound-only host telemetry agent for the Northstar Dashboard."""
+import asyncio
+import contextlib
+import logging
+import os
+import socket
+import time
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
+from urllib.parse import urlparse
+
+import docker
+import httpx
+import psutil
+from fastapi import FastAPI
+
+log = logging.getLogger("uvicorn.error")
+DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "").rstrip("/")
+AGENT_TOKEN = os.environ.get("AGENT_TOKEN", "")
+INTERVAL = max(15, int(os.environ.get("REPORT_INTERVAL", "30")))
+previous_network = None
+previous_time = None
+last_success = None
+
+
+def network_counters():
+    interfaces = psutil.net_io_counters(pernic=True)
+    selected = [x.strip() for x in os.getenv("NETWORK_INTERFACES", "").split(",") if x.strip()]
+    if not selected:
+        selected = [name for name in interfaces if not name.startswith(("lo", "veth", "docker", "br-", "virbr"))]
+    active = [name for name in selected if name in interfaces]
+    return {
+        "sent": sum(interfaces[name].bytes_sent for name in active),
+        "received": sum(interfaces[name].bytes_recv for name in active),
+        "interfaces": ", ".join(active),
+    }
+
+
+def host_metrics():
+    global previous_network, previous_time
+    current = time.monotonic()
+    network = network_counters()
+    elapsed = current - previous_time if previous_time is not None else 0
+    network["up"] = max(0, network["sent"] - previous_network["sent"]) / elapsed if elapsed else 0
+    network["down"] = max(0, network["received"] - previous_network["received"]) / elapsed if elapsed else 0
+    previous_network, previous_time = network.copy(), current
+    memory = psutil.virtual_memory()
+    disk = psutil.disk_usage("/host" if os.path.exists("/host") else "/")
+    return {
+        "name": os.getenv("SERVER_NAME") or socket.gethostname(),
+        "cpu": psutil.cpu_percent(),
+        "memory": memory.percent,
+        "memory_used": memory.used,
+        "memory_total": memory.total,
+        "disk": disk.percent,
+        "disk_used": disk.used,
+        "disk_total": disk.total,
+        "uptime": int(time.time() - psutil.boot_time()),
+        "network": network,
+    }
+
+
+def container_metrics():
+    try:
+        client = docker.from_env(timeout=3)
+        containers = client.api.containers(all=True)[:100]
+    except Exception:
+        return [], False
+
+    def sample(container):
+        item = {
+            "id": container["Id"][:12],
+            "name": (container.get("Names") or [container["Id"][:12]])[0].lstrip("/"),
+            "status": container.get("State", "unknown"),
+            "image": container.get("Image", ""),
+            "cpu": 0,
+            "memory": 0,
+            "stats_available": False,
+        }
+        if item["status"] == "running":
+            try:
+                stats = client.api.stats(container["Id"], stream=False)
+                cpu, previous = stats.get("cpu_stats", {}), stats.get("precpu_stats", {})
+                used = cpu.get("cpu_usage", {}).get("total_usage", 0) - previous.get("cpu_usage", {}).get("total_usage", 0)
+                total = cpu.get("system_cpu_usage", 0) - previous.get("system_cpu_usage", 0)
+                cores = cpu.get("online_cpus") or len(cpu.get("cpu_usage", {}).get("percpu_usage", [])) or 1
+                item["cpu"] = round(max(0, used / total * cores * 100), 1) if total > 0 else 0
+                memory = stats.get("memory_stats", {})
+                cache = memory.get("stats", {}).get("inactive_file", memory.get("stats", {}).get("total_inactive_file", 0))
+                item["memory"] = max(0, memory.get("usage", 0) - cache)
+                item["stats_available"] = True
+            except Exception:
+                pass
+        return item
+
+    try:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            return list(pool.map(sample, containers)), True
+    finally:
+        client.close()
+
+
+async def publish_loop():
+    global last_success
+    psutil.cpu_percent()
+    host_metrics()
+    await asyncio.sleep(1)
+    async with httpx.AsyncClient(timeout=15, follow_redirects=False) as http:
+        while True:
+            started = time.monotonic()
+            try:
+                host = host_metrics()
+                containers, available = await asyncio.to_thread(container_metrics)
+                response = await http.post(
+                    DASHBOARD_URL + "/api/agent",
+                    headers={"Authorization": "Bearer " + AGENT_TOKEN},
+                    json={"host": host, "containers": containers, "docker_available": available},
+                )
+                if response.status_code == 200:
+                    last_success = time.time()
+                    if not available:
+                        log.warning("Host metrics sent; Docker is unavailable. Check socket access and DOCKER_GID.")
+                else:
+                    log.warning("Dashboard rejected agent report (HTTP %s). Check the URL and token.", response.status_code)
+            except Exception as error:
+                log.warning("Agent report failed (%s); retrying next interval.", type(error).__name__)
+            await asyncio.sleep(max(1, INTERVAL - (time.monotonic() - started)))
+
+
+@asynccontextmanager
+async def lifespan(app):
+    parsed = urlparse(DASHBOARD_URL)
+    if parsed.scheme != "https" or not parsed.hostname or parsed.path not in ("", "/") or parsed.query or parsed.fragment or parsed.username:
+        raise RuntimeError("Set DASHBOARD_URL to the HTTPS origin of your dashboard")
+    if len(AGENT_TOKEN) < 32:
+        raise RuntimeError("Set AGENT_TOKEN from the dashboard's Connect server screen")
+    task = asyncio.create_task(publish_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+app = FastAPI(title="Northstar agent", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@app.get("/health")
+async def health():
+    return {"agent": "running", "reporting": last_success is not None and time.time() - last_success < INTERVAL * 3}

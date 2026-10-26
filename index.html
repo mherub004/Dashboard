@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0d1211"><meta name="description" content="Your private server, Docker and website operations dashboard.">
+<title>Northstar · Dashboard</title>
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/style.css"><script src="/assets/app.js" defer></script>
+</head>
+<body>
+<div class="ambient"></div>
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="#overview"><span class="brand-mark">↗</span><span>northstar<span class="accent">.</span><small>INFRASTRUCTURE</small></span></a>
+<div class="workspace"><span class="workspace-icon">A</span><div><b>Ahsan's workspace</b><small>Personal infrastructure</small></div><span class="muted">⌄</span></div>
+<div class="nav-label">WORKSPACE</div>
+<nav aria-label="Main navigation">
+<a href="#overview" class="nav-item active" data-view="overview"><span>◫</span>Overview</a>
+<a href="#websites" class="nav-item" data-view="websites"><span>◎</span>Websites <em id="siteCount">0</em></a>
+<a href="#containers" class="nav-item" data-view="containers"><span>▦</span>Containers</a>
+<a href="#services" class="nav-item" data-view="services"><span>◇</span>Services</a>
+</nav>
+<div class="sidebar-bottom"><button class="server-card" data-action="connect"><span class="accent">✳</span><div><b id="connectionLabel">Connect your server</b><small id="connectionSub">Ready when you are</small></div><i class="dot neutral" id="serverDot"></i></button>
+<button class="profile" data-action="account"><span class="avatar">A</span><span><b>Admin</b><small>Administrator</small></span><span class="profile-more">···</span></button></div>
+</aside>
+<main>
+<header class="topbar"><button class="icon-button mobile-menu" id="mobileMenu" aria-label="Open navigation" aria-expanded="false">☰</button><div class="breadcrumbs">Workspace <span>/</span><b id="crumb">Overview</b></div><div class="top-actions"><span class="live-indicator"><i class="dot" id="syncDot"></i><span id="syncLabel">READY</span></span><span class="divider"></span><button class="icon-button" id="refresh" aria-label="Refresh dashboard">↻</button><button class="icon-button" data-action="account" aria-label="Account settings">⚙</button><button class="avatar mini" data-action="account" aria-label="Admin account">A</button></div></header>
+<div class="content">
+<section class="welcome"><div><div class="eyebrow"><i></i><span id="today"></span></div><h1 id="pageTitle">Your infrastructure, <span>in focus.</span></h1><p id="pageSubtitle">Everything running behind your work. Right now.</p></div><div class="welcome-actions"><span id="lastUpdated">Waiting for first sync</span><button class="button primary" data-action="manage">＋ Manage setup</button></div></section>
+<div class="banner hidden" id="agentBanner"><span class="banner-icon">↗</span><div><b id="bannerTitle">Bring your server into the picture</b><p id="bannerText">Connect the lightweight agent to see live CPU, memory, network and Docker metrics.</p></div><button class="text-button" data-action="connect">Connect server →</button></div>
+<div class="error-banner hidden" id="pageError" role="alert"></div>
+<div id="overviewView">
+<section class="metric-grid" aria-label="Server metrics">
+<article class="metric-card"><div class="metric-head">CPU USAGE<span class="metric-icon coral">◉</span></div><div class="metric-number" id="cpuValue">—<small>%</small></div><div class="metric-foot" id="cpuContext">Waiting for your server</div><div class="metric-track"><i class="coral-fill" id="cpuBar"></i></div></article>
+<article class="metric-card"><div class="metric-head">MEMORY<span class="metric-icon violet">▤</span></div><div class="metric-number" id="memoryValue">—<small>%</small></div><div class="metric-foot" id="memoryContext">Waiting for your server</div><div class="metric-track"><i class="violet-fill" id="memoryBar"></i></div></article>
+<article class="metric-card"><div class="metric-head">NETWORK<span class="metric-icon cyan">⌁</span></div><div class="network-number"><span>↓ <b id="downValue">—</b></span><span>↑ <b id="upValue">—</b></span></div><div class="metric-foot">Inbound / outbound per second</div><div class="metric-track"><i class="cyan-fill" id="networkBar"></i></div></article>
+<article class="metric-card"><div class="metric-head">HOST UPTIME<span class="metric-icon lime">◷</span></div><div class="metric-number" id="uptimeValue">—</div><div class="metric-foot" id="hostName">No server connected</div><div class="metric-track"><i class="lime-fill" id="uptimeBar"></i></div></article>
+</section>
+<div class="dashboard-grid">
+<section class="panel performance-panel"><div class="panel-head"><div><div class="section-kicker">PERFORMANCE</div><h2>System overview</h2></div><div class="chart-legend"><span><i class="coral-fill"></i>CPU</span><span><i class="violet-fill"></i>Memory</span><span class="live-tag">LIVE</span></div></div><div class="chart-wrap"><div class="chart-y"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div><div class="chart-stage"><div class="chart-guides"><i></i><i></i><i></i><i></i><i></i></div><canvas id="chart" aria-label="CPU and memory history for this browser session"></canvas><span class="chart-empty" id="chartEmpty">Your performance story starts here</span></div></div><div class="chart-axis"><span id="chartStart">SESSION HISTORY</span><span>NOW</span></div><div class="chart-note"><span class="accent">✳</span><span id="chartNote">Connect your server to start collecting telemetry.</span></div></section>
+<section class="panel"><div class="panel-head"><div><div class="section-kicker">AVAILABILITY</div><h2>Website health</h2></div><a href="#websites" class="panel-link">View all <span>→</span></a></div><div class="health-summary"><div class="health-ring"><svg viewBox="0 0 76 76" aria-hidden="true"><circle class="ring-bg" cx="38" cy="38" r="31"></circle><circle id="healthRing" class="ring-fill" cx="38" cy="38" r="31"></circle></svg><div><b id="healthPercent">—</b><small>ONLINE</small></div></div><div><b id="healthCount">No checks yet</b><p id="healthCaption">Current endpoint availability</p></div></div><div id="healthList" class="health-list"><div class="empty">Your websites will appear here.</div></div><div class="panel-note">Checked while open · cached for 60 seconds</div></section>
+<section class="panel"><div class="panel-head"><div><div class="section-kicker">WORKLOADS</div><h2>Docker containers <span class="count" id="containerCount">0</span></h2></div><a href="#containers" class="panel-link">View all <span>→</span></a></div><div id="containerList"><div class="empty">Connect your agent to see containers.</div></div><div class="panel-bottom"><span id="dockerStatus">Docker connection pending</span><a href="#containers">Explore containers →</a></div></section>
+<section class="panel"><div class="panel-head"><div><div class="section-kicker">YOUR STACK</div><h2>Services</h2></div><button class="quiet-button" id="addService">＋ Add</button></div><div id="serviceList"><div class="empty">Add your infrastructure services.</div></div><div class="panel-note">Service status is maintained by you.</div></section>
+</div>
+</div>
+<section class="hidden" id="listView"><div class="list-heading"><div><div class="section-kicker" id="listKicker"></div><h2 id="listTitle"></h2><p id="listDescription"></p></div><button class="button primary" id="listAdd">＋ Add</button></div><div class="panel table-panel"><div id="listTable"></div></div></section>
+<footer><span><b>northstar<span class="accent">.</span></b> Infrastructure at a glance.</span><span>PRIVATE WORKSPACE <i>·</i> YOUR INFRASTRUCTURE</span></footer>
+</div>
+</main>
+<dialog id="loginDialog"><div class="modal-content"><div class="modal-emblem">✳</div><div class="section-kicker">WELCOME BACK</div><h2>Sign in to your workspace</h2><p>Your infrastructure is private. Sign in to continue.</p><form id="loginForm"><label>Username<input name="username" autocomplete="username" value="admin" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><p class="form-error" id="loginError" role="alert"></p><button class="button primary full" type="submit">Sign in →</button></form><div class="modal-note">A private view of everything you run.</div></div></dialog>
+<dialog id="editorDialog"><div class="modal-content"><button class="close" data-close aria-label="Close editor">×</button><div class="section-kicker">WORKSPACE EDITOR</div><h2>Manage your setup</h2><p>Add websites, domains and the services behind your work.</p><div class="tabs"><button class="tab active" data-tab="websites" type="button">Websites & domains</button><button class="tab" data-tab="services" type="button">Services</button></div><form id="editorForm"><div id="editorRows"></div><button class="add-row" id="editorAdd" type="button">＋ Add website</button><p class="form-error" id="editorError" role="alert"></p><div class="modal-actions"><button class="button quiet" data-close type="button">Cancel</button><button class="button primary" type="submit">Save changes</button></div></form></div></dialog>
+<dialog id="connectDialog"><div class="modal-content"><button class="close" data-close aria-label="Close connection instructions">×</button><div class="section-kicker">SERVER CONNECTION</div><h2>Meet your infrastructure</h2><p>Run the agent on your Linux Docker server. It sends metrics here every 30 seconds over HTTPS.</p><ol class="setup-steps"><li>Clone the repository on your server.<pre>git clone https://github.com/mherub004/Dashboard.git
+cd Dashboard
+cp .env.example .env</pre></li><li>Copy your connection settings into <code>.env</code>.<label>Agent token<input id="agentToken" type="password" readonly autocomplete="off"></label><button class="button quiet" id="copyAgent" type="button">Copy connection settings</button></li><li>Set <code>DOCKER_GID</code> from this command, then start the agent.<pre>stat -c '%g' /var/run/docker.sock
+docker compose up -d --build</pre></li></ol><div class="modal-note">The token grants permission to send telemetry. Keep it private. No public server port is needed.</div></div></dialog>
+<dialog id="accountDialog"><div class="modal-content"><button class="close" data-close aria-label="Close account settings">×</button><div class="section-kicker">ADMIN ACCOUNT</div><h2>Keep your workspace yours</h2><p>Change your password here. Updating it signs out all sessions.</p><form id="passwordForm"><label>Current password<input name="current_password" type="password" autocomplete="current-password" required></label><label>New password<input name="new_password" type="password" autocomplete="new-password" minlength="16" maxlength="128" required></label><label>Confirm new password<input name="confirm_password" type="password" autocomplete="new-password" minlength="16" required></label><p class="form-error" id="passwordError" role="alert"></p><button class="button primary full" type="submit">Update password</button></form><div class="modal-note"><button class="text-button" id="logout" type="button">Sign out →</button></div></div></dialog>
+<div id="toast" role="status"></div>
+</body>
+</html>
