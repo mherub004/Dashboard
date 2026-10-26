@@ -100,7 +100,9 @@ export function validateTelemetry(data) {
       query_history:Array.isArray(data.dns.query_history)?data.dns.query_history.slice(-48).map(x=>number(x)):[],
       blocked_history:Array.isArray(data.dns.blocked_history)?data.dns.blocked_history.slice(-48).map(x=>number(x)):[],
       domains:Array.isArray(data.dns.domains)?data.dns.domains.slice(0,8).map(x=>({domain:text(x.domain,120),count:number(x.count)})):[],
-      clients:Array.isArray(data.dns.clients)?data.dns.clients.slice(0,32).map(x=>({ip:text(x.ip,64),count:number(x.count)})):[]
+      clients:Array.isArray(data.dns.clients)?data.dns.clients.slice(0,32).map(x=>({ip:text(x.ip,64),count:number(x.count)})):[],
+      querylog_available:data.dns.querylog_available===true,
+      recent_queries:Array.isArray(data.dns.recent_queries)?data.dns.recent_queries.slice(0,50).map(x=>({domain:text(x.domain,180),client:text(x.client,64),time:text(x.time,40),reason:text(x.reason,80),status:text(x.status,32)})):[]
     } : null,
     backup: data.backup && typeof data.backup === "object" ? { last_success: data.backup.last_success == null ? null : number(data.backup.last_success) } : null
   };

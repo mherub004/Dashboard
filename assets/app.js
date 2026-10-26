@@ -51,7 +51,7 @@
       $("#lastUpdated").textContent = "Sync unavailable";
     } finally {
       state.busy = false; $("#refresh").disabled = false;
-      if (state.authenticated) poll = setTimeout(refresh, 15000);
+      if (state.authenticated) poll = setTimeout(refresh, 5000);
     }
   }
   function render() {
@@ -111,6 +111,11 @@
     $("#dnsQueries").textContent=dns.available?Number(dns.queries||0).toLocaleString():"—";
     $("#dnsBlocked").textContent=dns.available?Number(dns.blocked||0).toLocaleString():"—";
     $("#dnsDomains").innerHTML=dns.available&&dns.domains?.length?dns.domains.map(x=>"<div class=dns-domain><span>"+escape(x.domain)+"</span><b>"+Number(x.count||0).toLocaleString()+"</b></div>").join(""):empty(dns.available?"AdGuard has no domain history yet.":"Set AdGuard connection details in the server agent .env file.");
+    const queries=dns.recent_queries||[];
+    $("#queryLogStatus").textContent=dns.querylog_available?"LIVE · 10S":"NOT CONFIGURED";
+    $("#queryLogStatus").classList.toggle("network-ok",dns.querylog_available===true);
+    $("#queryLogCount").textContent=queries.length;
+    $("#queryLogRows").innerHTML=queries.length?queries.map(q=>"<tr><td>"+escape(q.time?new Date(q.time).toLocaleTimeString():"—")+"</td><td>"+escape(q.domain||"—")+"</td><td>"+escape(q.client||"—")+"</td><td>"+escape(q.reason||q.status||"Resolved")+"</td></tr>").join(""):'<tr><td colspan="4" class="network-empty">'+(dns.available?"No recent DNS requests, or AdGuard query logging is disabled.":"Connect AdGuard Home in the server agent .env file.")+'</td></tr>';
     const peers=d.vpn_peers||[];
     $("#networkVpnCount").textContent=Array.isArray(peers)?String(peers.length):"—";
     $("#networkPeerRows").innerHTML=Array.isArray(peers)&&peers.length?peers.map(p=>"<tr><td>"+escape(p.name)+"</td><td>"+escape(p.ip||"—")+"</td><td>"+escape(p.last_seen?new Date(p.last_seen).toLocaleString():"Never")+"</td><td>"+bytes(p.received)+"</td><td>"+bytes(p.sent)+"</td><td><span class=network-badge>"+(p.online?"Recent handshake":"Inactive")+"</span></td></tr>").join(""):'<tr><td colspan="6" class="network-empty">No WireGuard peers reported. Check the host WireGuard helper.</td></tr>';

@@ -14,18 +14,21 @@ from urllib.parse import urlparse
 import docker
 import httpx
 import psutil
+import ipaddress
+from datetime import datetime, timezone
 from fastapi import FastAPI
 
 log = logging.getLogger("uvicorn.error")
 DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "").rstrip("/")
 AGENT_TOKEN = os.environ.get("AGENT_TOKEN", "")
-INTERVAL = max(15, int(os.environ.get("REPORT_INTERVAL", "30")))
+INTERVAL = max(5, int(os.environ.get("REPORT_INTERVAL", "10")))
 previous_network = None
 previous_time = None
 previous_interfaces = None
 previous_interfaces_time = None
 last_success = None
 WIREGUARD_STATUS_FILE = os.getenv("WIREGUARD_STATUS_FILE", "/var/lib/mtech-infra/wireguard-status.json")
+WIREGUARD_CONTAINER = os.getenv("WIREGUARD_CONTAINER", "").strip()
 BACKUP_HEARTBEAT_FILE = os.getenv("BACKUP_HEARTBEAT_FILE", "")
 
 
@@ -161,16 +164,32 @@ async def dns_metrics(http):
                     label, count = next(iter(item.items()))
                     output.append({field: str(label)[:120], "count": int(count) if isinstance(count, (int, float)) else 0})
             return output
-        return {"available": True, "queries": int(raw.get("num_dns_queries", 0)),
-            "blocked": int(raw.get("num_blocked_filtering", 0)),
+        querylog = {}
+        try:
+            log_response = await http.get(base + "/control/querylog", params={"limit": 50},
+                auth=(os.getenv("ADGUARD_USERNAME", ""), os.getenv("ADGUARD_PASSWORD", "")), timeout=4)
+            log_response.raise_for_status()
+            querylog = log_response.json()
+        except (httpx.HTTPError, ValueError, TypeError):
+            querylog = {}
+        recent_queries = []
+        for entry in querylog.get("data", [])[:50] if isinstance(querylog.get("data", []), list) else []:
+            question = entry.get("question") if isinstance(entry, dict) else {}
+            if not isinstance(question, dict):
+                question = {}
+            recent_queries.append({"domain": str(question.get("host", ""))[:180],
+                "client": str(entry.get("client", ""))[:64], "time": str(entry.get("time", ""))[:40],
+                "reason": str(entry.get("reason", ""))[:80], "status": str(entry.get("status", ""))[:32]})
+        return {"available": True, "querylog_available": isinstance(querylog.get("data"), list),
+            "queries": int(raw.get("num_dns_queries", 0)), "blocked": int(raw.get("num_blocked_filtering", 0)),
             "time_units": raw.get("time_units") if raw.get("time_units") in ("hours", "days") else "hours",
             "query_history": [int(x) for x in raw.get("dns_queries", [])[-48:] if isinstance(x, (int, float))],
             "blocked_history": [int(x) for x in raw.get("blocked_filtering", [])[-48:] if isinstance(x, (int, float))],
             "domains": top_rows(raw.get("top_queried_domains", []), "domain"),
-            "clients": top_rows(raw.get("top_clients", []), "ip")}
+            "clients": top_rows(raw.get("top_clients", []), "ip"), "recent_queries": recent_queries}
     except (httpx.HTTPError, ValueError, TypeError):
         return {"available": False, "queries": None, "blocked": None, "time_units": "hours",
-            "query_history": [], "blocked_history": [], "domains": [], "clients": []}
+            "query_history": [], "blocked_history": [], "domains": [], "clients": [], "querylog_available": False, "recent_queries": []}
 
 
 def backup_metrics():
@@ -184,6 +203,55 @@ def backup_metrics():
 
 
 def wireguard_metrics():
+    def peers_from_output(allowed, handshakes, transfers):
+        last_handshake = {}
+        for line in handshakes.splitlines():
+            fields = line.split("\\t")
+            if len(fields) >= 3:
+                last_handshake[(fields[0], fields[1])] = int(fields[2] or 0)
+        byte_counts = {}
+        for line in transfers.splitlines():
+            fields = line.split("\\t")
+            if len(fields) >= 4:
+                byte_counts[(fields[0], fields[1])] = (int(fields[2] or 0), int(fields[3] or 0))
+        peers = []
+        for line in allowed.splitlines():
+            fields = line.split("\\t", 2)
+            if len(fields) < 3:
+                continue
+            interface, public_key, allowed_ips = fields
+            try:
+                address = str(ipaddress.ip_interface(allowed_ips.split(",")[0]).ip)
+            except (ValueError, IndexError):
+                address = allowed_ips.split(",")[0][:64]
+            timestamp = last_handshake.get((interface, public_key), 0)
+            peers.append({"name": (interface + " · " + address).strip(" ·"), "ip": address,
+                "online": timestamp > 0 and time.time() - timestamp <= 180,
+                "last_seen": datetime.fromtimestamp(timestamp, timezone.utc).isoformat() if timestamp else None,
+                "received": byte_counts.get((interface, public_key), (0, 0))[0],
+                "sent": byte_counts.get((interface, public_key), (0, 0))[1]})
+        return peers[:100]
+
+    if WIREGUARD_CONTAINER:
+        client = None
+        try:
+            client = docker.from_env(timeout=4)
+            container = client.containers.get(WIREGUARD_CONTAINER)
+            def wg(*args):
+                result = container.exec_run(["wg", *args])
+                if result.exit_code != 0:
+                    raise RuntimeError("wg command failed in configured container")
+                output = result.output.decode("utf-8", errors="replace") if isinstance(result.output, bytes) else str(result.output)
+                return output
+            peers = peers_from_output(wg("show", "all", "allowed-ips"),
+                wg("show", "all", "latest-handshakes"), wg("show", "all", "transfer"))
+            return peers, None
+        except Exception:
+            log.warning("Could not read WireGuard container %s; check WIREGUARD_CONTAINER and Docker access.", WIREGUARD_CONTAINER)
+        finally:
+            if client is not None:
+                client.close()
+
     status_file = Path("/host") / WIREGUARD_STATUS_FILE.lstrip("/")
     try:
         report = json.loads(status_file.read_text(encoding="utf-8"))
@@ -194,14 +262,11 @@ def wireguard_metrics():
         for peer in report["peers"][:100]:
             if not isinstance(peer, dict):
                 continue
-            peers.append({
-                "name": str(peer.get("name") or "WireGuard peer")[:80],
-                "ip": str(peer.get("ip") or "")[:64],
-                "online": peer.get("online") is True,
+            peers.append({"name": str(peer.get("name") or "WireGuard peer")[:80],
+                "ip": str(peer.get("ip") or "")[:64], "online": peer.get("online") is True,
                 "last_seen": peer.get("last_seen") if isinstance(peer.get("last_seen"), str) else None,
                 "received": int(peer.get("received", 0)) if isinstance(peer.get("received", 0), (int, float)) else 0,
-                "sent": int(peer.get("sent", 0)) if isinstance(peer.get("sent", 0), (int, float)) else 0,
-            })
+                "sent": int(peer.get("sent", 0)) if isinstance(peer.get("sent", 0), (int, float)) else 0})
         return peers, None
     except (OSError, ValueError, TypeError):
         return None, "not_configured"
