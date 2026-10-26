@@ -7,7 +7,7 @@
 <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/style.css?v=features-2"><script src="/assets/app.js?v=features-5" defer></script>
+<link rel="stylesheet" href="/assets/style.css?v=network-1"><script src="/assets/app.js?v=network-1" defer></script>
 </head>
 <body>
 <div class="ambient"></div>
@@ -19,6 +19,7 @@
 <a href="#overview" class="nav-item active" data-view="overview"><span>◫</span>Overview</a>
 <a href="#websites" class="nav-item" data-view="websites"><span>◎</span>Websites <em id="siteCount">0</em></a>
 <a href="#containers" class="nav-item" data-view="containers"><span>▦</span>Containers</a>
+<a href="#network" class="nav-item" data-view="network"><span>⌁</span>Home network</a>
 <a href="#services" class="nav-item" data-view="services"><span>◇</span>Services</a>
 <a href="#planner" class="nav-item" data-view="planner"><span>▣</span>Planner</a>
 </nav>
@@ -55,6 +56,16 @@
 </section>
 </div>
 <section class="hidden" id="listView"><div class="list-heading"><div><div class="section-kicker" id="listKicker"></div><h2 id="listTitle"></h2><p id="listDescription"></p></div><button class="button primary" id="listAdd">＋ Add</button></div><div class="panel table-panel"><div id="listTable"></div></div></section>
+<section id="networkView" class="hidden">
+<div class="network-grid">
+<article class="panel network-traffic-panel"><div class="panel-head"><div><div class="section-kicker">SERVER CONNECTION · LAST 30 MIN</div><h2>Bandwidth usage</h2></div><span class="network-live">HOST INTERFACES</span></div><div class="network-current"><span>↓ <b id="networkDown">—</b></span><span>↑ <b id="networkUp">—</b></span></div><div class="network-chart-wrap"><canvas id="networkChart" aria-label="Recent server download and upload bandwidth"></canvas><div class="network-chart-labels"><span id="networkChartStart">Waiting for telemetry</span><span>Now</span></div></div><p class="network-note">This measures traffic to and from your server. Vodafone Station does not expose each LAN device’s bandwidth to this dashboard.</p></article>
+<article class="panel network-dns-panel"><div class="panel-head"><div><div class="section-kicker">ADGUARD HOME</div><h2>DNS activity</h2></div><span class="network-live" id="dnsAvailability">NOT CONFIGURED</span></div><div class="dns-total-row"><div><small>QUERIES</small><b id="dnsQueries">—</b></div><div><small>BLOCKED</small><b id="dnsBlocked">—</b></div></div><div class="dns-chart-wrap"><canvas id="dnsChart" aria-label="DNS query volume over time"></canvas></div><div class="dns-top-title">TOP QUERIED DOMAINS</div><div id="dnsDomains" class="dns-domain-list"></div></article>
+<article class="panel network-wide"><div class="panel-head"><div><div class="section-kicker">SERVER NETWORK ADAPTERS</div><h2>Interface traffic</h2></div></div><div class="network-table-scroll"><table class="network-table"><thead><tr><th>INTERFACE</th><th>DOWNLOAD</th><th>UPLOAD</th><th>RECEIVED TOTAL</th><th>SENT TOTAL</th></tr></thead><tbody id="interfaceRows"></tbody></table></div></article>
+<article class="panel network-wide"><div class="panel-head"><div><div class="section-kicker">HOME LAN</div><h2>Devices seen on network <span class="count" id="lanDeviceCount">0</span></h2></div></div><div class="network-table-scroll"><table class="network-table"><thead><tr><th>DEVICE / IP</th><th>MAC</th><th>INTERFACE</th><th>DNS QUERIES</th><th>VISIBILITY</th></tr></thead><tbody id="lanDeviceRows"></tbody></table></div><p class="network-note">This combines the server’s recent neighbor cache with AdGuard Home client activity. It does not claim per-device bandwidth.</p></article>
+<article class="panel network-wide"><div class="panel-head"><div><div class="section-kicker">WIREGUARD · VPN</div><h2>Peers and transfer usage <span class="count" id="networkVpnCount">—</span></h2></div></div><div class="network-table-scroll"><table class="network-table"><thead><tr><th>PEER</th><th>TUNNEL IP</th><th>LAST HANDSHAKE</th><th>RECEIVED</th><th>SENT</th><th>STATUS</th></tr></thead><tbody id="networkPeerRows"></tbody></table></div></article>
+<div class="network-info">Per-device download/upload requires router client counters or flow export. A single public IPv6 address and the WireGuard port do not provide those measurements. Cloudflare Pages displays private telemetry sent by the home server agent.</div>
+</div>
+</section>
 <footer><span><b>MTech <span class="accent">Infra</span></b> Your server at a glance.</span><span>PRIVATE WORKSPACE <i>·</i> YOUR INFRASTRUCTURE</span></footer>
 </div>
 </main>

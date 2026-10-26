@@ -2,7 +2,7 @@
   "use strict";
   const $ = s => document.querySelector(s);
   const $$ = s => [...document.querySelectorAll(s)];
-  const state = { authenticated: false, data: null, view: "overview", history: [], busy: false, draft: null, tab: "websites", connection: null, notes: {}, selectedDate: (()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")})(), calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1), extrasLoaded: false };
+  const state = { authenticated: false, data: null, view: "overview", history: [], networkHistory: [], busy: false, draft: null, tab: "websites", connection: null, notes: {}, selectedDate: (()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")})(), calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1), extrasLoaded: false };
   let poll, toastTimer;
   const escape = v => String(v ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
   const bytes = value => {
@@ -74,11 +74,12 @@
     $("#hostName").textContent = h ? h.name : "No server connected"; $("#uptimeBar").style.width = connected ? "100%" : "0%";
     if (h && connected && !state.history.some(p => p.at === d.received_at)) {
       state.history.push({ at: d.received_at, cpu: h.cpu, memory: h.memory }); if (state.history.length > 60) state.history.shift();
+      state.networkHistory.push({ at:d.received_at, up:Number(h.network.up)||0, down:Number(h.network.down)||0 }); if(state.networkHistory.length>60)state.networkHistory.shift();
     }
     $("#chartEmpty").classList.toggle("hidden", state.history.length > 0);
     $("#chartNote").textContent = h ? bytes(h.disk_used) + " of " + bytes(h.disk_total) + " disk used · " + h.disk.toFixed(0) + "% · network: " + (h.network.interfaces || "host") : "Connect your server to start collecting telemetry.";
     if (state.history.length) $("#chartStart").textContent = new Date(state.history[0].at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    drawChart();
+    drawChart(); renderNetwork(d);
     const sites = d.websites || [], up = sites.filter(s => s.status === "Online").length;
     $("#siteCount").textContent = sites.length;
     $("#healthPercent").textContent = sites.length ? Math.round(up / sites.length * 100) + "%" : "—";
@@ -92,6 +93,42 @@
     const services = d.services || [];
     $("#serviceList").innerHTML = services.length ? services.slice(0, 4).map((s, i) => '<div class="service-row"><span class="service-icon">' + ["✳", "◈", "◌", "◇"][i % 4] + "</span><div><b>" + escape(s.name) + "</b><small>" + escape(s.description) + "</small></div>" + status(s.status) + "</div>").join("") : empty("Add the services behind your infrastructure.");
     renderList();
+  }
+  function renderNetwork(d) {
+    const h=d.host, net=h?.network||{}, dns=d.dns||{};
+    $("#networkDown").textContent=bytes(net.down); $("#networkUp").textContent=bytes(net.up);
+    $("#networkChartStart").textContent=state.networkHistory.length?new Date(state.networkHistory[0].at*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}):"Waiting for telemetry";
+    const interfaces=net.interface_stats||[];
+    $("#interfaceRows").innerHTML=interfaces.length?interfaces.map(x=>"<tr><td>"+escape(x.name)+"</td><td class=network-down>↓ "+bytes(x.down)+"/s</td><td class=network-up>↑ "+bytes(x.up)+"/s</td><td>"+bytes(x.received)+"</td><td>"+bytes(x.sent)+"</td></tr>").join(""):'<tr><td colspan="5" class="network-empty">No interface counters reported. Check NETWORK_INTERFACES in the server agent.</td></tr>';
+    const neighbors=d.devices||[], clientMap=new Map((dns.clients||[]).map(x=>[x.ip,x.count])), combined=new Map();
+    neighbors.forEach(x=>combined.set(x.ip,{...x,queries:clientMap.get(x.ip)||0}));
+    (dns.clients||[]).forEach(x=>{if(!combined.has(x.ip))combined.set(x.ip,{ip:x.ip,mac:"",interface:"",queries:x.count})});
+    const devices=[...combined.values()];
+    $("#lanDeviceCount").textContent=devices.length;
+    $("#lanDeviceRows").innerHTML=devices.length?devices.map(x=>"<tr><td>"+escape(x.ip)+"</td><td>"+escape(x.mac||"—")+"</td><td>"+escape(x.interface||"—")+"</td><td>"+Number(x.queries||0).toLocaleString()+"</td><td><span class=network-badge>"+(x.mac?"Seen by server":"AdGuard DNS client")+"</span></td></tr>").join(""):'<tr><td colspan="5" class="network-empty">No devices reported yet. Enable AdGuard integration or wait for the server to see LAN neighbors.</td></tr>';
+    $("#dnsAvailability").textContent=dns.available?"CONNECTED":"NOT CONFIGURED";
+    $("#dnsAvailability").classList.toggle("network-ok",dns.available===true);
+    $("#dnsQueries").textContent=dns.available?Number(dns.queries||0).toLocaleString():"—";
+    $("#dnsBlocked").textContent=dns.available?Number(dns.blocked||0).toLocaleString():"—";
+    $("#dnsDomains").innerHTML=dns.available&&dns.domains?.length?dns.domains.map(x=>"<div class=dns-domain><span>"+escape(x.domain)+"</span><b>"+Number(x.count||0).toLocaleString()+"</b></div>").join(""):empty(dns.available?"AdGuard has no domain history yet.":"Set AdGuard connection details in the server agent .env file.");
+    const peers=d.vpn_peers||[];
+    $("#networkVpnCount").textContent=Array.isArray(peers)?String(peers.length):"—";
+    $("#networkPeerRows").innerHTML=Array.isArray(peers)&&peers.length?peers.map(p=>"<tr><td>"+escape(p.name)+"</td><td>"+escape(p.ip||"—")+"</td><td>"+escape(p.last_seen?new Date(p.last_seen).toLocaleString():"Never")+"</td><td>"+bytes(p.received)+"</td><td>"+bytes(p.sent)+"</td><td><span class=network-badge>"+(p.online?"Recent handshake":"Inactive")+"</span></td></tr>").join(""):'<tr><td colspan="6" class="network-empty">No WireGuard peers reported. Check the host WireGuard helper.</td></tr>';
+    drawNetworkChart(); drawDnsChart(dns);
+  }
+  function drawNetworkChart() {
+    const canvas=$("#networkChart"),rect=canvas.getBoundingClientRect();if(!rect.width||!rect.height)return;
+    const ratio=window.devicePixelRatio||1;canvas.width=Math.floor(rect.width*ratio);canvas.height=Math.floor(rect.height*ratio);
+    const ctx=canvas.getContext("2d");ctx.scale(ratio,ratio);ctx.clearRect(0,0,rect.width,rect.height);
+    const points=state.networkHistory,max=Math.max(1,...points.flatMap(p=>[p.up,p.down]));
+    for(const [key,color] of [["down","#278ebc"],["up","#8e6cd4"]]){if(!points.length)continue;ctx.beginPath();points.forEach((p,i)=>{const x=points.length<2?rect.width/2:i/(points.length-1)*rect.width,y=rect.height-5-(p[key]/max)*(rect.height-12);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.stroke();}
+  }
+  function drawDnsChart(dns) {
+    const canvas=$("#dnsChart"),rect=canvas.getBoundingClientRect();if(!rect.width||!rect.height)return;
+    const ratio=window.devicePixelRatio||1;canvas.width=Math.floor(rect.width*ratio);canvas.height=Math.floor(rect.height*ratio);
+    const ctx=canvas.getContext("2d");ctx.scale(ratio,ratio);ctx.clearRect(0,0,rect.width,rect.height);
+    const values=dns.query_history||[],max=Math.max(1,...values),gap=3,w=rect.width/Math.max(values.length,1);
+    values.forEach((v,i)=>{const bh=(v/max)*(rect.height-4);ctx.fillStyle="#2c9ec6";ctx.globalAlpha=.45+(i/Math.max(1,values.length))*.55;ctx.fillRect(i*w+gap/2,rect.height-bh,Math.max(1,w-gap),bh)});ctx.globalAlpha=1;
   }
   function drawChart() {
     const canvas = $("#chart"), rect = canvas.getBoundingClientRect(); if (!rect.width || !rect.height) return;
@@ -162,16 +199,16 @@
   }
   function setView() {
     const view = location.hash.slice(1);
-    state.view = ["websites", "containers", "services", "planner"].includes(view) ? view : "overview";
-    const titles = { overview: "Overview", websites: "Websites & domains", containers: "Docker containers", services: "Services", planner: "Calendar & notes" };
+    state.view = ["websites", "containers", "services", "network", "planner"].includes(view) ? view : "overview";
+    const titles = { overview: "Overview", websites: "Websites & domains", containers: "Docker containers", services: "Services", network: "Home network", planner: "Calendar & notes" };
     $$(".nav-item").forEach(a => a.classList.toggle("active", a.dataset.view === state.view));
     $("#crumb").textContent = titles[state.view];
     $("#pageTitle").innerHTML = state.view === "overview" ? "Your infrastructure, <span>in focus.</span>" : escape(titles[state.view]) + " <span>at a glance.</span>";
-    $("#pageSubtitle").textContent = state.view === "overview" ? "Everything running behind your work. Right now." : { websites: "Know when your websites are reachable.", containers: "A clear view of every workload on your server.", services: "Keep your infrastructure services organized.", planner: "Plan ahead and keep notes for each day." }[state.view];
-    $("#overviewView").classList.toggle("hidden", !["overview", "planner"].includes(state.view)); $("#listView").classList.toggle("hidden", ["overview", "planner"].includes(state.view));
+    $("#pageSubtitle").textContent = state.view === "overview" ? "Everything running behind your work. Right now." : { websites: "Know when your websites are reachable.", containers: "A clear view of every workload on your server.", services: "Keep your infrastructure services organized.", planner: "Plan ahead and keep notes for each day.", network: "Live server traffic, DNS, LAN devices and WireGuard peers." }[state.view];
+    $("#overviewView").classList.toggle("hidden", !["overview", "planner"].includes(state.view)); $("#listView").classList.toggle("hidden", ["overview", "planner", "network"].includes(state.view)); $("#networkView").classList.toggle("hidden", state.view !== "network");
     $(".feature-grid > .panel").forEach(panel => panel.classList.toggle("hidden", state.view === "planner" && !panel.classList.contains("planner-panel")));
     $("#sidebar").classList.remove("open"); $("#mobileMenu").setAttribute("aria-expanded", "false");
-    renderList(); requestAnimationFrame(drawChart);
+    renderList(); requestAnimationFrame(()=>{drawChart();drawNetworkChart();drawDnsChart(state.data?.dns||{})});
   }
   function renderList() {
     if (["overview", "planner"].includes(state.view)) return;

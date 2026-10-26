@@ -78,7 +78,8 @@ export function validateTelemetry(data) {
       memory_used: number(h.memory_used), memory_total: number(h.memory_total),
       disk: number(h.disk, 100), disk_used: number(h.disk_used), disk_total: number(h.disk_total),
       uptime: number(h.uptime),
-      network: { sent: number(n.sent), received: number(n.received), up: number(n.up), down: number(n.down), interfaces: text(n.interfaces, 200) }
+      network: { sent: number(n.sent), received: number(n.received), up: number(n.up), down: number(n.down), interfaces: text(n.interfaces, 200),
+        interface_stats: Array.isArray(n.interface_stats) ? n.interface_stats.slice(0, 32).map(x => ({name:text(x.name,32), sent:number(x.sent), received:number(x.received), up:number(x.up), down:number(x.down)})) : [] }
     },
     docker_available: data.docker_available === true,
     docker_error: data.docker_available === true ? null : ["permission_denied", "socket_missing", "daemon_unreachable"].includes(data.docker_error) ? data.docker_error : "unknown",
@@ -88,9 +89,19 @@ export function validateTelemetry(data) {
     })),
     vpn_peers: Array.isArray(data.vpn_peers) ? data.vpn_peers.slice(0, 100).map(p => ({
       name: text(p.name, 80), ip: text(p.ip, 64), online: p.online === true,
-      last_seen: typeof p.last_seen === "string" && !Number.isNaN(Date.parse(p.last_seen)) ? new Date(p.last_seen).toISOString() : null
+      last_seen: typeof p.last_seen === "string" && !Number.isNaN(Date.parse(p.last_seen)) ? new Date(p.last_seen).toISOString() : null,
+      received: number(p.received), sent: number(p.sent)
     })) : null,
     vpn_error: data.vpn_error === "unavailable" ? "unavailable" : data.vpn_error === "not_configured" ? "not_configured" : null,
+    devices: Array.isArray(data.devices) ? data.devices.slice(0,100).map(x=>({ip:text(x.ip,64),mac:text(x.mac,24),interface:text(x.interface,32)})) : [],
+    dns: data.dns && typeof data.dns === "object" ? {
+      available:data.dns.available===true, queries:data.dns.queries==null?null:number(data.dns.queries), blocked:data.dns.blocked==null?null:number(data.dns.blocked),
+      time_units:data.dns.time_units==="days"?"days":"hours",
+      query_history:Array.isArray(data.dns.query_history)?data.dns.query_history.slice(-48).map(x=>number(x)):[],
+      blocked_history:Array.isArray(data.dns.blocked_history)?data.dns.blocked_history.slice(-48).map(x=>number(x)):[],
+      domains:Array.isArray(data.dns.domains)?data.dns.domains.slice(0,8).map(x=>({domain:text(x.domain,120),count:number(x.count)})):[],
+      clients:Array.isArray(data.dns.clients)?data.dns.clients.slice(0,32).map(x=>({ip:text(x.ip,64),count:number(x.count)})):[]
+    } : null,
     backup: data.backup && typeof data.backup === "object" ? { last_success: data.backup.last_success == null ? null : number(data.backup.last_success) } : null
   };
 }

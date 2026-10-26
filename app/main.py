@@ -22,22 +22,32 @@ AGENT_TOKEN = os.environ.get("AGENT_TOKEN", "")
 INTERVAL = max(15, int(os.environ.get("REPORT_INTERVAL", "30")))
 previous_network = None
 previous_time = None
+previous_interfaces = None
+previous_interfaces_time = None
 last_success = None
 WIREGUARD_STATUS_FILE = os.getenv("WIREGUARD_STATUS_FILE", "/var/lib/mtech-infra/wireguard-status.json")
 BACKUP_HEARTBEAT_FILE = os.getenv("BACKUP_HEARTBEAT_FILE", "")
 
 
 def network_counters():
-    interfaces = psutil.net_io_counters(pernic=True)
+    global previous_interfaces, previous_interfaces_time
+    counters = psutil.net_io_counters(pernic=True)
     selected = [x.strip() for x in os.getenv("NETWORK_INTERFACES", "").split(",") if x.strip()]
     if not selected:
-        selected = [name for name in interfaces if not name.startswith(("lo", "veth", "docker", "br-", "virbr"))]
-    active = [name for name in selected if name in interfaces]
-    return {
-        "sent": sum(interfaces[name].bytes_sent for name in active),
-        "received": sum(interfaces[name].bytes_recv for name in active),
-        "interfaces": ", ".join(active),
-    }
+        selected = [name for name in counters if not name.startswith(("lo", "veth", "docker", "br-", "virbr", "wg", "tun"))]
+    active = [name for name in selected if name in counters]
+    now = time.monotonic()
+    elapsed = max(now - previous_interfaces_time, 0.1) if previous_interfaces_time is not None else 0
+    interface_stats = []
+    for name in active:
+        item, prior = counters[name], (previous_interfaces or {}).get(name)
+        interface_stats.append({"name": name, "sent": item.bytes_sent, "received": item.bytes_recv,
+            "up": round(max(0, item.bytes_sent - prior.bytes_sent) / elapsed) if prior and elapsed else 0,
+            "down": round(max(0, item.bytes_recv - prior.bytes_recv) / elapsed) if prior and elapsed else 0})
+    previous_interfaces, previous_interfaces_time = counters, now
+    return {"sent": sum(counters[name].bytes_sent for name in active),
+        "received": sum(counters[name].bytes_recv for name in active), "interfaces": ", ".join(active),
+        "interface_stats": interface_stats}
 
 
 def host_metrics():
@@ -118,6 +128,51 @@ def container_metrics():
         client.close()
 
 
+def lan_devices():
+    """Best-effort host neighbor cache; it is not a router-wide client list."""
+    devices = {}
+    try:
+        for row in Path("/host/proc/net/arp").read_text(encoding="utf-8").splitlines()[1:]:
+            fields = row.split()
+            if len(fields) < 6 or fields[2] == "0x0" or fields[3] == "00:00:00:00:00:00":
+                continue
+            ip, mac, iface = fields[0], fields[3], fields[5]
+            if ip.startswith(("127.", "169.254.")):
+                continue
+            devices[ip] = {"ip": ip, "mac": mac, "interface": iface}
+    except OSError:
+        pass
+    return list(devices.values())[:100]
+
+
+async def dns_metrics(http):
+    base = os.getenv("ADGUARD_URL", "").strip().rstrip("/")
+    if not base:
+        return None
+    try:
+        response = await http.get(base + "/control/stats",
+            auth=(os.getenv("ADGUARD_USERNAME", ""), os.getenv("ADGUARD_PASSWORD", "")), timeout=4)
+        response.raise_for_status()
+        raw = response.json()
+        def top_rows(rows, field):
+            output = []
+            for item in rows[:8] if isinstance(rows, list) else []:
+                if isinstance(item, dict) and item:
+                    label, count = next(iter(item.items()))
+                    output.append({field: str(label)[:120], "count": int(count) if isinstance(count, (int, float)) else 0})
+            return output
+        return {"available": True, "queries": int(raw.get("num_dns_queries", 0)),
+            "blocked": int(raw.get("num_blocked_filtering", 0)),
+            "time_units": raw.get("time_units") if raw.get("time_units") in ("hours", "days") else "hours",
+            "query_history": [int(x) for x in raw.get("dns_queries", [])[-48:] if isinstance(x, (int, float))],
+            "blocked_history": [int(x) for x in raw.get("blocked_filtering", [])[-48:] if isinstance(x, (int, float))],
+            "domains": top_rows(raw.get("top_queried_domains", []), "domain"),
+            "clients": top_rows(raw.get("top_clients", []), "ip")}
+    except (httpx.HTTPError, ValueError, TypeError):
+        return {"available": False, "queries": None, "blocked": None, "time_units": "hours",
+            "query_history": [], "blocked_history": [], "domains": [], "clients": []}
+
+
 def backup_metrics():
     if not BACKUP_HEARTBEAT_FILE:
         return None
@@ -144,6 +199,8 @@ def wireguard_metrics():
                 "ip": str(peer.get("ip") or "")[:64],
                 "online": peer.get("online") is True,
                 "last_seen": peer.get("last_seen") if isinstance(peer.get("last_seen"), str) else None,
+                "received": int(peer.get("received", 0)) if isinstance(peer.get("received", 0), (int, float)) else 0,
+                "sent": int(peer.get("sent", 0)) if isinstance(peer.get("sent", 0), (int, float)) else 0,
             })
         return peers, None
     except (OSError, ValueError, TypeError):
@@ -162,10 +219,12 @@ async def publish_loop():
                 host = host_metrics()
                 containers, available, docker_error = await asyncio.to_thread(container_metrics)
                 vpn_peers, vpn_status = wireguard_metrics()
+                devices = await asyncio.to_thread(lan_devices)
+                dns = await dns_metrics(http)
                 response = await http.post(
                     DASHBOARD_URL + "/api/agent",
                     headers={"Authorization": "Bearer " + AGENT_TOKEN},
-                    json={"host": host, "containers": containers, "docker_available": available, "docker_error": docker_error, "vpn_peers": vpn_peers, "vpn_error": vpn_status, "backup": backup_metrics()},
+                    json={"host": host, "containers": containers, "docker_available": available, "docker_error": docker_error, "vpn_peers": vpn_peers, "vpn_error": vpn_status, "devices": devices, "dns": dns, "backup": backup_metrics()},
                 )
                 if response.status_code == 200:
                     last_success = time.time()

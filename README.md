@@ -118,6 +118,12 @@ docker compose logs -f agent
 
 The dashboard reports a specific Docker socket error. For rootless Docker, set DOCKER_SOCKET and DOCKER_HOST to the daemon's actual socket, often `/run/user/<user-id>/docker.sock`, and set DOCKER_GID to that socket's group. Restart the agent after any .env change.
 
+### Home network visualizations
+
+The Home network page shows server interface throughput and byte totals, LAN neighbors visible in the host ARP cache, AdGuard Home query statistics/top domains/top clients, and WireGuard peer handshakes and transfer totals. The server agent cannot see each device's bandwidth through a Vodafone Station unless the router provides per-client counters/flow export or a network monitor is placed at the gateway. The public IP and WireGuard port do not expose that data.
+
+To enable AdGuard Home statistics, set `ADGUARD_URL`, `ADGUARD_USERNAME`, and `ADGUARD_PASSWORD` in the agent's `.env` file. The address must be reachable from the host-networked agent; use the AdGuard Home web port (commonly `http://127.0.0.1:80` after setup). Then run `docker compose up -d --build` in the agent directory. Keep credentials on the server. DNS history uses AdGuard Home's statistics endpoint; query counts and domain names are sent to the authenticated dashboard storage.
+
 ### Enable WireGuard peers and backup history
 
 The helper reads a host-level WireGuard interface. On Debian or Ubuntu, install the `wg` utility first, then confirm `sudo wg show all` lists your interface and peers. On a host using apt, install WireGuard tools with `sudo apt update && sudo apt install wireguard`. The host agent reads a snapshot file; it does not need `NET_ADMIN` or access to WireGuard private keys. Install the helper from the repo on the host and schedule it as root once per minute:
@@ -135,7 +141,7 @@ Add this line to root's crontab:
 * * * * * /usr/local/bin/mtech-wireguard-status >/dev/null 2>&1
 ~~~
 
-Set `WIREGUARD_STATUS_FILE=/var/lib/mtech-infra/wireguard-status.json` in the server's `.env`. The helper reads only `wg show all allowed-ips` and `wg show all latest-handshakes` (it does not read private or preshared keys) and writes peer interface labels, allowed IPs, and latest handshake times. A recent handshake is shown as recent; WireGuard cannot prove a peer is currently reachable just from an old handshake. If WireGuard runs only inside a separate container/network namespace, this host helper will not see it and needs to run in that namespace.
+Set `WIREGUARD_STATUS_FILE=/var/lib/mtech-infra/wireguard-status.json` in the server's `.env`. The helper reads allowed IPs, latest handshakes, and transfer byte counters from `wg` (never private or preshared keys) and writes peer labels, tunnel IPs, handshake times, and received/sent totals. A recent handshake is shown as recent; WireGuard cannot prove a peer is currently reachable just from an old handshake. If WireGuard runs only inside a separate container/network namespace, this host helper will not see it and needs to run in that namespace.
 
 To track backups, set `BACKUP_HEARTBEAT_FILE` in `.env` to an absolute path on the host. Make the marker readable to the agent. Your backup script must touch it only after a successful backup, for example:
 

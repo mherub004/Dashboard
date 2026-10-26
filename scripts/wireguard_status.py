@@ -25,6 +25,13 @@ def main():
         text=True,
         timeout=10,
     )
+    transfers = subprocess.run(
+        ["wg", "show", "all", "transfer"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
     handshakes = subprocess.run(
         ["wg", "show", "all", "latest-handshakes"],
         check=True,
@@ -37,6 +44,12 @@ def main():
         fields = line.split("\t")
         if len(fields) >= 3:
             last_handshake[(fields[0], fields[1])] = int(fields[2] or "0")
+
+    transfer_bytes = {}
+    for line in transfers.stdout.splitlines():
+        fields = line.split("\\t")
+        if len(fields) >= 4:
+            transfer_bytes[(fields[0], fields[1])] = (int(fields[2] or 0), int(fields[3] or 0))
 
     peers = []
     for line in allowed.stdout.splitlines():
@@ -64,6 +77,8 @@ def main():
             "ip": address,
             "online": recent,
             "last_seen": last_seen,
+            "received": transfer_bytes.get((interface, public_key), (0, 0))[0],
+            "sent": transfer_bytes.get((interface, public_key), (0, 0))[1],
         })
 
     payload = {"generated_at": int(time.time()), "peers": peers[:100]}
