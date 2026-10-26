@@ -110,12 +110,14 @@
   const weatherIcon = code => code === 0 ? "☀" : [1,2].includes(code) ? "⛅" : [71,73,75].includes(code) ? "❄" : [95,96,99].includes(code) ? "ϟ" : "☂";
   async function loadWeather() {
     try {
-      const url = "https://api.open-meteo.com/v1/forecast?latitude=49.5897&longitude=11.0119&timezone=Europe%2FBerlin&current=temperature_2m,weather_code,precipitation,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=4";
+      const url = "https://api.open-meteo.com/v1/forecast?latitude=49.5897&longitude=11.0119&timezone=Europe%2FBerlin&current=temperature_2m,weather_code,precipitation&hourly=precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=4";
       const r = await fetch(url); if (!r.ok) throw new Error(); const w = await r.json(), c = w.current, d = w.daily;
       $("#weatherTemp").textContent = Math.round(c.temperature_2m) + "°";
       $("#weatherSummary").textContent = weatherText(c.weather_code);
       $(".weather-icon").textContent = weatherIcon(c.weather_code);
-      $("#weatherRain").textContent = "Rain " + (c.precipitation_probability ?? d.precipitation_probability_max[0] ?? 0) + "%";
+      const hourIndex = w.hourly.time.indexOf(c.time);
+      const rainChance = hourIndex >= 0 ? w.hourly.precipitation_probability[hourIndex] : d.precipitation_probability_max[0];
+      $("#weatherRain").textContent = "Rain chance " + (rainChance ?? 0) + "%";
       $("#weatherHighLow").textContent = "Today " + Math.round(d.temperature_2m_max[0]) + "° / " + Math.round(d.temperature_2m_min[0]) + "°";
       $("#weatherForecast").innerHTML = d.time.slice(1).map((day,i)=>'<div><small>'+new Date(day+"T12:00:00").toLocaleDateString("en",{weekday:"short"})+'</small><span>'+weatherIcon(d.weather_code[i+1])+'</span><b>'+Math.round(d.temperature_2m_max[i+1])+'°</b></div>').join("");
     } catch { $("#weatherSummary").textContent = "Forecast temporarily unavailable"; }
@@ -148,8 +150,8 @@
     $("#storageTotal").textContent=h?bytes(h.disk_total)+" total · OS filesystem":"Disk usage updates with server telemetry.";
     $("#storageRing").style.setProperty("--used",h?Math.min(100,h.disk)+"%":"0%");
     const peers=d.vpn_peers;
-    $("#vpnPeerCount").textContent=Array.isArray(peers)?peers.filter(p=>p.online).length+" online":"—";
-    $("#vpnPeerList").innerHTML=Array.isArray(peers)?(peers.length?peers.map(p=>'<div class="peer-row"><i class="dot '+(p.online?"":"offline")+'"></i><span><b>'+escape(p.name)+'</b><small>'+escape(p.ip||"No IP reported")+'</small></span><em>'+escape(p.online?"Connected":p.last_seen?"Seen "+new Date(p.last_seen).toLocaleString():"Offline")+'</em></div>').join(""):empty("No devices are listed in this Tailnet.")):'<div class="integration-empty"><span class="integration-badge">'+(d.vpn_error==="unavailable"?"CHECK TAILSCALE SETTINGS":"AGENT SETUP NEEDED")+'</span><p>'+(d.vpn_error==="unavailable"?"The agent could not read this Tailnet. Check the OAuth client scope and tailnet name.":"Add a read-only Tailscale OAuth client to the server agent to see devices, IPs and last seen time.")+'</p></div>';
+    $("#vpnPeerCount").textContent=Array.isArray(peers)?peers.filter(p=>p.online).length+" recent":"—";
+    $("#vpnPeerList").innerHTML=Array.isArray(peers)?(peers.length?peers.map(p=>'<div class="peer-row"><i class="dot '+(p.online?"":"offline")+'"></i><span><b>'+escape(p.name)+'</b><small>'+escape(p.ip||"No IP reported")+'</small></span><em>'+escape(p.online?"Recent handshake":p.last_seen?"Last handshake "+new Date(p.last_seen).toLocaleString():"No handshake yet")+'</em></div>').join(""):empty("No peers are listed on the host WireGuard interfaces.")):'<div class="integration-empty"><span class="integration-badge">'+(d.vpn_error==="unavailable"?"CHECK WIREGUARD HELPER":"AGENT SETUP NEEDED")+'</span><p>'+(d.vpn_error==="unavailable"?"The agent cannot read the WireGuard snapshot. Check the host helper and file path.":"Install the WireGuard status helper on the host to see peer IPs and latest handshakes.")+'</p></div>';
     const backupTime=d.backup?.last_success;
     const backupAge=backupTime?Math.floor(Date.now()/1000-backupTime):null;
     $("#backupStatus").textContent=backupTime?"Last success · "+(backupAge<3600?Math.max(1,Math.floor(backupAge/60))+"m ago":backupAge<86400?Math.floor(backupAge/3600)+"h ago":Math.floor(backupAge/86400)+"d ago"):d.backup?"Marker file not found":"Not configured";

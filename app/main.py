@@ -2,10 +2,10 @@
 import asyncio
 import contextlib
 import logging
+import json
 import os
 import socket
 from pathlib import Path
-from urllib.parse import quote
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
@@ -23,14 +23,7 @@ INTERVAL = max(15, int(os.environ.get("REPORT_INTERVAL", "30")))
 previous_network = None
 previous_time = None
 last_success = None
-vpn_cache = []
-vpn_checked = -300
-vpn_error = "not_configured"
-TAILSCALE_OAUTH_CLIENT_ID = os.getenv("TAILSCALE_OAUTH_CLIENT_ID", "")
-TAILSCALE_OAUTH_CLIENT_SECRET = os.getenv("TAILSCALE_OAUTH_CLIENT_SECRET", "")
-TAILSCALE_TAILNET = os.getenv("TAILSCALE_TAILNET", "")
-vpn_access_token = ""
-vpn_token_expires = 0
+WIREGUARD_STATUS_FILE = os.getenv("WIREGUARD_STATUS_FILE", "/var/lib/mtech-infra/wireguard-status.json")
 BACKUP_HEARTBEAT_FILE = os.getenv("BACKUP_HEARTBEAT_FILE", "")
 
 
@@ -135,65 +128,26 @@ def backup_metrics():
         return {"last_success": None}
 
 
-async def tailscale_token(http):
-    global vpn_access_token, vpn_token_expires
-    if vpn_access_token and time.time() < vpn_token_expires - 60:
-        return vpn_access_token
-    response = await http.post(
-        "https://api.tailscale.com/api/v2/oauth/token",
-        data={
-            "grant_type": "client_credentials",
-            "client_id": TAILSCALE_OAUTH_CLIENT_ID,
-            "client_secret": TAILSCALE_OAUTH_CLIENT_SECRET,
-            "scope": "devices:core:read",
-        },
-    )
-    response.raise_for_status()
-    data = response.json()
-    vpn_access_token = data["access_token"]
-    vpn_token_expires = time.time() + int(data.get("expires_in", 3600))
-    return vpn_access_token
-
-
-async def tailscale_metrics(http):
-    global vpn_cache, vpn_checked, vpn_error, vpn_access_token, vpn_token_expires
-    if not TAILSCALE_OAUTH_CLIENT_ID or not TAILSCALE_OAUTH_CLIENT_SECRET or not TAILSCALE_TAILNET:
-        vpn_error = "not_configured"
-        return None, vpn_error
-    if time.monotonic() - vpn_checked < 300:
-        return vpn_cache, vpn_error
+def wireguard_metrics():
+    status_file = Path("/host") / WIREGUARD_STATUS_FILE.lstrip("/")
     try:
-        tailnet = quote(TAILSCALE_TAILNET, safe="@.-")
-        token = await tailscale_token(http)
-        response = await http.get(
-            "https://api.tailscale.com/api/v2/tailnet/" + tailnet + "/devices",
-            headers={"Authorization": "Bearer " + token},
-        )
-        if response.status_code == 401:
-            vpn_access_token, vpn_token_expires = "", 0
-            token = await tailscale_token(http)
-            response = await http.get(
-                "https://api.tailscale.com/api/v2/tailnet/" + tailnet + "/devices",
-                headers={"Authorization": "Bearer " + token},
-            )
-        response.raise_for_status()
-        payload = response.json()
-        devices = payload.get("devices", []) if isinstance(payload, dict) else []
-        if not isinstance(devices, list):
-            devices = []
+        report = json.loads(status_file.read_text(encoding="utf-8"))
+        generated = int(report.get("generated_at", 0))
+        if not isinstance(report.get("peers"), list) or time.time() - generated > 180:
+            return None, "unavailable"
         peers = []
-        for device in devices[:100]:
-            name = str(device.get("hostname") or device.get("name") or "Tailscale device")[:80]
-            addresses = device.get("addresses") if isinstance(device.get("addresses"), list) else []
-            ip = next((str(value) for value in addresses if isinstance(value, str)), "")
-            last_seen = device.get("lastSeen") if isinstance(device.get("lastSeen"), str) else None
-            peers.append({"name": name, "ip": ip[:64], "online": device.get("online") is True, "last_seen": last_seen})
-        vpn_cache, vpn_error, vpn_checked = peers, None, time.monotonic()
-        return vpn_cache, None
-    except (httpx.HTTPError, ValueError, TypeError, KeyError):
-        vpn_error = "unavailable"
-        vpn_checked = time.monotonic()
-        return None, vpn_error
+        for peer in report["peers"][:100]:
+            if not isinstance(peer, dict):
+                continue
+            peers.append({
+                "name": str(peer.get("name") or "WireGuard peer")[:80],
+                "ip": str(peer.get("ip") or "")[:64],
+                "online": peer.get("online") is True,
+                "last_seen": peer.get("last_seen") if isinstance(peer.get("last_seen"), str) else None,
+            })
+        return peers, None
+    except (OSError, ValueError, TypeError):
+        return None, "not_configured"
 
 
 async def publish_loop():
@@ -207,7 +161,7 @@ async def publish_loop():
             try:
                 host = host_metrics()
                 containers, available, docker_error = await asyncio.to_thread(container_metrics)
-                vpn_peers, vpn_status = await tailscale_metrics(http)
+                vpn_peers, vpn_status = wireguard_metrics()
                 response = await http.post(
                     DASHBOARD_URL + "/api/agent",
                     headers={"Authorization": "Bearer " + AGENT_TOKEN},

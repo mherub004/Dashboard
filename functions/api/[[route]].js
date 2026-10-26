@@ -106,7 +106,7 @@ async function checkSite(site, db) {
   try {
     let target = publicUrl(site.url);
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 7000);
+    const timeout = setTimeout(() => controller.abort(), 3000);
     try {
       for (let redirects = 0; redirects <= 3; redirects++) {
         const response = await fetch(target, { method: "GET", redirect: "manual", signal: controller.signal, headers: { "User-Agent": "MTechInfraDashboard/1.0" } });
