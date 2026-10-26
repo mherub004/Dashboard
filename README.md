@@ -1,4 +1,4 @@
-# Northstar Dashboard
+# MTech Infra
 
 A private operations dashboard for server resources, Docker containers, network throughput, websites, and services.
 
@@ -89,3 +89,25 @@ For local Pages development, use Wrangler with a local D1 database and local sec
 ## Cost and limits
 
 This deployment uses Cloudflare Pages and D1 with free-tier usage in mind. No paid subscription or paid API is required by the code. Free tiers have quotas, and your server, domain and payment processing costs are separate. This is a monitoring foundation, not a guarantee of zero operating costs at arbitrary scale.
+
+## Docker troubleshooting
+
+If host CPU, memory, disk and network appear but containers do not, the agent is reaching the dashboard and its Docker socket is the part that needs fixing.
+
+On the server, check the daemon and socket:
+
+~~~bash
+docker ps
+stat -c '%g %n' /var/run/docker.sock
+grep '^DOCKER_GID=' .env
+docker compose logs --tail=50 agent
+~~~
+
+Set DOCKER_GID in .env to the numeric group printed by stat, then recreate the agent:
+
+~~~bash
+docker compose up -d --build
+docker compose logs -f agent
+~~~
+
+The dashboard reports a specific Docker socket error. For rootless Docker, set DOCKER_SOCKET and DOCKER_HOST to the daemon's actual socket, often `/run/user/<user-id>/docker.sock`, and set DOCKER_GID to that socket's group. Restart the agent after any .env change.

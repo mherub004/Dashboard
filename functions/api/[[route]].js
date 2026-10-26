@@ -81,6 +81,7 @@ export function validateTelemetry(data) {
       network: { sent: number(n.sent), received: number(n.received), up: number(n.up), down: number(n.down), interfaces: text(n.interfaces, 200) }
     },
     docker_available: data.docker_available === true,
+    docker_error: data.docker_available === true ? null : ["permission_denied", "socket_missing", "daemon_unreachable"].includes(data.docker_error) ? data.docker_error : "unknown",
     containers: data.containers.slice(0, 100).map(c => ({
       id: text(c.id, 16), name: text(c.name), status: text(c.status, 24), cpu: number(c.cpu), memory: number(c.memory),
       image: text(c.image, 160), stats_available: c.stats_available === true
@@ -102,7 +103,7 @@ async function checkSite(site, db) {
     const timeout = setTimeout(() => controller.abort(), 7000);
     try {
       for (let redirects = 0; redirects <= 3; redirects++) {
-        const response = await fetch(target, { method: "GET", redirect: "manual", signal: controller.signal, headers: { "User-Agent": "NorthstarDashboard/1.0" } });
+        const response = await fetch(target, { method: "GET", redirect: "manual", signal: controller.signal, headers: { "User-Agent": "MTechInfraDashboard/1.0" } });
         const code = response.status;
         await response.body?.cancel();
         if ([301, 302, 303, 307, 308].includes(code) && response.headers.get("Location")) {
@@ -188,7 +189,7 @@ export async function onRequest({ request, env }) {
       const config = await configuration(env.DB);
       const report = await env.DB.prepare("SELECT data,received_at FROM telemetry WHERE id=1").first();
       const live = !!report && now() - report.received_at < 120;
-      const metrics = report ? JSON.parse(report.data) : { host: null, containers: [], docker_available: false };
+      const metrics = report ? JSON.parse(report.data) : { host: null, containers: [], docker_available: false, docker_error: "unknown" };
       const websites = [];
       for (let i = 0; i < config.websites.length; i += 4) {
         websites.push(...await Promise.all(config.websites.slice(i, i + 4).map(s => checkSite(s, env.DB))));

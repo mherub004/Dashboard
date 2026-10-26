@@ -1,4 +1,4 @@
-"""Outbound-only host telemetry agent for the Northstar Dashboard."""
+"""Outbound-only host telemetry agent for MTech Infra."""
 import asyncio
 import contextlib
 import logging
@@ -60,12 +60,26 @@ def host_metrics():
     }
 
 
+def docker_diagnostic(error):
+    message = str(error).lower()
+    if "permission denied" in message or "access is denied" in message:
+        return "permission_denied"
+    if any(value in message for value in ("no such file or directory", "cannot find the file", "socket is not available")):
+        return "socket_missing"
+    if any(value in message for value in ("connection refused", "timed out", "connection aborted", "unreachable")):
+        return "daemon_unreachable"
+    return "unknown"
+
+
 def container_metrics():
+    client = None
     try:
         client = docker.from_env(timeout=3)
         containers = client.api.containers(all=True)[:100]
-    except Exception:
-        return [], False
+    except Exception as error:
+        if client is not None:
+            client.close()
+        return [], False, docker_diagnostic(error)
 
     def sample(container):
         item = {
@@ -95,7 +109,7 @@ def container_metrics():
 
     try:
         with ThreadPoolExecutor(max_workers=4) as pool:
-            return list(pool.map(sample, containers)), True
+            return list(pool.map(sample, containers)), True, None
     finally:
         client.close()
 
@@ -110,16 +124,16 @@ async def publish_loop():
             started = time.monotonic()
             try:
                 host = host_metrics()
-                containers, available = await asyncio.to_thread(container_metrics)
+                containers, available, docker_error = await asyncio.to_thread(container_metrics)
                 response = await http.post(
                     DASHBOARD_URL + "/api/agent",
                     headers={"Authorization": "Bearer " + AGENT_TOKEN},
-                    json={"host": host, "containers": containers, "docker_available": available},
+                    json={"host": host, "containers": containers, "docker_available": available, "docker_error": docker_error},
                 )
                 if response.status_code == 200:
                     last_success = time.time()
                     if not available:
-                        log.warning("Host metrics sent; Docker is unavailable. Check socket access and DOCKER_GID.")
+                        log.warning("Host metrics are reporting, but Docker is unavailable (%s). Check DOCKER_GID, DOCKER_SOCKET and Docker service status.", docker_error)
                 else:
                     log.warning("Dashboard rejected agent report (HTTP %s). Check the URL and token.", response.status_code)
             except Exception as error:
@@ -143,7 +157,7 @@ async def lifespan(app):
             await task
 
 
-app = FastAPI(title="Northstar agent", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title="MTech Infra agent", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.get("/health")

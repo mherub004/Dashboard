@@ -24,6 +24,7 @@ test("telemetry validates shape and bounds numeric values", () => {
   assert.equal(report.host.memory, 0);
   assert.equal(report.host.network.up, 0);
   assert.equal(report.docker_available, false);
+  assert.equal(report.docker_error, "unknown");
 });
 
 test("private API routes never disclose data without a session", async () => {

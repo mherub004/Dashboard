@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0d1211"><meta name="description" content="Your private server, Docker and website operations dashboard.">
-<title>Northstar · Dashboard</title>
+<title>MTech Infra · Dashboard</title>
 <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -12,7 +12,7 @@
 <body>
 <div class="ambient"></div>
 <aside class="sidebar" id="sidebar">
-<a class="brand" href="#overview"><span class="brand-mark">↗</span><span>northstar<span class="accent">.</span><small>INFRASTRUCTURE</small></span></a>
+<a class="brand" href="#overview"><span class="brand-mark">↗</span><span>MTech <span class="brand-secondary">Infra</span><small>SERVER DASHBOARD</small></span></a>
 <div class="workspace"><span class="workspace-icon">A</span><div><b>Ahsan's workspace</b><small>Personal infrastructure</small></div><span class="muted">⌄</span></div>
 <div class="nav-label">WORKSPACE</div>
 <nav aria-label="Main navigation">
@@ -45,7 +45,7 @@
 </div>
 </div>
 <section class="hidden" id="listView"><div class="list-heading"><div><div class="section-kicker" id="listKicker"></div><h2 id="listTitle"></h2><p id="listDescription"></p></div><button class="button primary" id="listAdd">＋ Add</button></div><div class="panel table-panel"><div id="listTable"></div></div></section>
-<footer><span><b>northstar<span class="accent">.</span></b> Infrastructure at a glance.</span><span>PRIVATE WORKSPACE <i>·</i> YOUR INFRASTRUCTURE</span></footer>
+<footer><span><b>MTech <span class="accent">Infra</span></b> Your server at a glance.</span><span>PRIVATE WORKSPACE <i>·</i> YOUR INFRASTRUCTURE</span></footer>
 </div>
 </main>
 <dialog id="loginDialog"><div class="modal-content"><div class="modal-emblem">✳</div><div class="section-kicker">WELCOME BACK</div><h2>Sign in to your workspace</h2><p>Your infrastructure is private. Sign in to continue.</p><form id="loginForm"><label>Username<input name="username" autocomplete="username" value="admin" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><p class="form-error" id="loginError" role="alert"></p><button class="button primary full" type="submit">Sign in →</button></form><div class="modal-note">A private view of everything you run.</div></div></dialog>

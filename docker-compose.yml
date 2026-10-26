@@ -1,14 +1,15 @@
 services:
   agent:
     build: .
-    container_name: northstar-agent
+    container_name: mtech-infra-agent
     restart: unless-stopped
     env_file: .env
     network_mode: host
+    user: "${AGENT_UID:-10001}:${AGENT_GID:-10001}"
     group_add:
       - "${DOCKER_GID:?Set DOCKER_GID to the group owning /var/run/docker.sock}"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - "${DOCKER_SOCKET:-/var/run/docker.sock}:${DOCKER_SOCKET:-/var/run/docker.sock}:ro"
       - /:/host:ro
     read_only: true
     tmpfs:
