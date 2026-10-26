@@ -135,11 +135,14 @@ sudo /usr/local/bin/mtech-wireguard-status
 sudo crontab -e
 ~~~
 
-Add this line to root's crontab:
+If WireGuard runs in a Portainer container, get its exact container name with `docker ps --format 'table {{.Names}}\t{{.Image}}'`, then put that name in root's crontab. The helper uses `docker exec <name> wg`; it does not install or start another WireGuard server. For host-installed WireGuard, leave the variable unset.
 
 ~~~cron
+WIREGUARD_CONTAINER=your-wireguard-container-name
 * * * * * /usr/local/bin/mtech-wireguard-status >/dev/null 2>&1
 ~~~
+
+Replace the example value with the real container name. If your server is on the host, omit the first line.
 
 Set `WIREGUARD_STATUS_FILE=/var/lib/mtech-infra/wireguard-status.json` in the server's `.env`. The helper reads allowed IPs, latest handshakes, and transfer byte counters from `wg` (never private or preshared keys) and writes peer labels, tunnel IPs, handshake times, and received/sent totals. A recent handshake is shown as recent; WireGuard cannot prove a peer is currently reachable just from an old handshake. If WireGuard runs only inside a separate container/network namespace, this host helper will not see it and needs to run in that namespace.
 

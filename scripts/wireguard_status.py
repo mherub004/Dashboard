@@ -12,33 +12,25 @@ from pathlib import Path
 OUTPUT = Path("/var/lib/mtech-infra/wireguard-status.json")
 
 
+def run_wg(*args):
+    container = os.getenv("WIREGUARD_CONTAINER", "").strip()
+    command = ["docker", "exec", container, "wg", *args] if container else ["wg", *args]
+    return subprocess.run(command, check=True, capture_output=True, text=True, timeout=10)
+
+
 def main():
     try:
-        subprocess.run(["wg", "--version"], check=True, capture_output=True, timeout=5)
-    except FileNotFoundError:
-        raise SystemExit("The 'wg' command is missing. Install WireGuard tools on the host, then retry.")
+        run_wg("--version")
+    except FileNotFoundError as error:
+        if os.getenv("WIREGUARD_CONTAINER", "").strip():
+            raise SystemExit("Docker CLI is missing on the host.") from error
+        raise SystemExit("No WIREGUARD_CONTAINER is set and host 'wg' is missing. Set WIREGUARD_CONTAINER to the Portainer container name.") from error
+    except subprocess.CalledProcessError as error:
+        raise SystemExit("Could not run wg. Check that the WireGuard container name is correct and running.") from error
 
-    allowed = subprocess.run(
-        ["wg", "show", "all", "allowed-ips"],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    transfers = subprocess.run(
-        ["wg", "show", "all", "transfer"],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    handshakes = subprocess.run(
-        ["wg", "show", "all", "latest-handshakes"],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
+    allowed = run_wg("show", "all", "allowed-ips")
+    transfers = run_wg("show", "all", "transfer")
+    handshakes = run_wg("show", "all", "latest-handshakes")
     last_handshake = {}
     for line in handshakes.stdout.splitlines():
         fields = line.split("\t")
@@ -47,7 +39,7 @@ def main():
 
     transfer_bytes = {}
     for line in transfers.stdout.splitlines():
-        fields = line.split("\\t")
+        fields = line.split("\t")
         if len(fields) >= 4:
             transfer_bytes[(fields[0], fields[1])] = (int(fields[2] or 0), int(fields[3] or 0))
 
