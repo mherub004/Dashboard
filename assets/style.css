@@ -148,3 +148,53 @@ input:focus, select:focus { border-color: #38a68a; box-shadow: 0 0 0 3px #52bd9b
 .setup-steps code { color: #1b806c; }
 pre { color: #30445b; border-color: #e0e7ec; background: #f5f8fa; }
 #toast { color: #245d4f; border-color: #bddfd0; background: #effaf4; box-shadow: 0 8px 30px #294d3330; }
+
+
+/* Lighter MTech Infra palette */
+:root {
+  --bg: #edf2fa;
+  --panel: #ffffff;
+  --line: #e1e7f0;
+  --text: #18253a;
+  --muted: #63738c;
+  --green: #12826f;
+  --coral: #e56868;
+  --violet: #7959d0;
+  --cyan: #138da8;
+}
+body {
+  background:
+    radial-gradient(ellipse at 87% 2%, #dce5ff 0, #dce5ff00 32rem),
+    radial-gradient(ellipse at 18% 12%, #dff4ed 0, #dff4ed00 28rem),
+    #edf2fa;
+}
+.sidebar { background: linear-gradient(180deg,#fff 0%,#fbfcff 70%,#f5f7ff 100%); }
+.brand-mark { background: linear-gradient(135deg,#37b694,#448cd4); color:#fff; box-shadow:0 5px 14px #438fbd38; }
+.brand-secondary { color:#5666bf; }
+.workspace { background:#f6f8fc; }
+.nav-item.active { background:#e7f5f0; color:#146d60; box-shadow:inset 3px 0 #239e83; }
+.nav-item em { background:#ebeaff; color:#6458b7; }
+.topbar { background:#ffffffed; box-shadow:0 2px 12px #50648908; }
+h1 span { color:#257fa6; }
+.button.primary { background:linear-gradient(115deg,#188c77,#218eae); box-shadow:0 5px 15px #218a9b2c; }
+.button.primary:hover { background:linear-gradient(115deg,#137861,#187997); }
+.metric-card { box-shadow:0 5px 20px #50648912; }
+.metric-card:nth-child(1) { background:linear-gradient(145deg,#fff 15%,#fff0ed); }
+.metric-card:nth-child(2) { background:linear-gradient(145deg,#fff 15%,#f2eeff); }
+.metric-card:nth-child(3) { background:linear-gradient(145deg,#fff 15%,#eafbff); }
+.metric-card:nth-child(4) { background:linear-gradient(145deg,#fff 15%,#ebf8ef); }
+.metric-card::before { content:""; position:absolute; inset:0 0 auto; height:3px; background:#dd6870; }
+.metric-card:nth-child(2)::before { background:#8162d5; }
+.metric-card:nth-child(3)::before { background:#25a5ba; }
+.metric-card:nth-child(4)::before { background:#42a879; }
+.panel { box-shadow:0 6px 22px #465d7e0d; }
+.section-kicker { color:#647c9e; }
+.chart-note { background:linear-gradient(90deg,#f5f8ff,#f4fbf8); }
+.status { padding:4px 7px; border-radius:20px; background:#e8f6ee; }
+.status.degraded { color:#93630d; background:#fff3d9; }
+.status.offline { color:#ac453f; background:#ffebe8; }
+.health-ring .ring-fill { stroke:#239d7f; }
+.service-icon { background:linear-gradient(145deg,#35b394,#278fa1); }
+.banner { background:linear-gradient(110deg,#e8f3ff,#e9f8f0); border-color:#cbddec; }
+.banner-icon { background:#dcedff; color:#327caf; }
+dialog { background:#fff; box-shadow:0 25px 100px #273d5c38; }
