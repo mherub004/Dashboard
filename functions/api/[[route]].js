@@ -174,6 +174,15 @@ export async function onRequest({ request, env }) {
     const current = await session(request, env.DB);
     if (path === "/api/session" && method === "GET") return json({ authenticated: !!current, username: current ? "admin" : null });
     if (!current) fail("Sign in to continue", 401);
+    if (path === "/api/weather" && method === "GET") {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 7000);
+      try {
+        const upstream = await fetch("https://api.open-meteo.com/v1/forecast?latitude=49.5897&longitude=11.0119&timezone=Europe%2FBerlin&current=temperature_2m,weather_code,precipitation&hourly=precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=4", { signal: controller.signal });
+        if (!upstream.ok) fail("The weather service is temporarily unavailable", 502);
+        return json(await upstream.json(), 200, { "Cache-Control": "private, max-age=900" });
+      } finally { clearTimeout(timeout); }
+    }
     if (path === "/api/logout" && method === "POST") {
       await env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(current.token_hash).run();
       return json({ authenticated: false }, 200, { "Set-Cookie": cookie("", 0) });

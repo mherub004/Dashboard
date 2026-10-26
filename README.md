@@ -120,7 +120,7 @@ The dashboard reports a specific Docker socket error. For rootless Docker, set D
 
 ### Enable WireGuard peers and backup history
 
-The host agent reads a snapshot file; it does not need `NET_ADMIN` or access to WireGuard private keys. Install the helper from the repo on the host and schedule it as root once per minute:
+The helper reads a host-level WireGuard interface. On Debian or Ubuntu, install the `wg` utility first, then confirm `sudo wg show all` lists your interface and peers. On a host using apt, install WireGuard tools with `sudo apt update && sudo apt install wireguard`. The host agent reads a snapshot file; it does not need `NET_ADMIN` or access to WireGuard private keys. Install the helper from the repo on the host and schedule it as root once per minute:
 
 ~~~bash
 sudo install -d -m 755 /var/lib/mtech-infra

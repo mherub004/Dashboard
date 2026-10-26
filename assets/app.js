@@ -110,8 +110,7 @@
   const weatherIcon = code => code === 0 ? "☀" : [1,2].includes(code) ? "⛅" : [71,73,75].includes(code) ? "❄" : [95,96,99].includes(code) ? "ϟ" : "☂";
   async function loadWeather() {
     try {
-      const url = "https://api.open-meteo.com/v1/forecast?latitude=49.5897&longitude=11.0119&timezone=Europe%2FBerlin&current=temperature_2m,weather_code,precipitation&hourly=precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=4";
-      const r = await fetch(url); if (!r.ok) throw new Error(); const w = await r.json(), c = w.current, d = w.daily;
+      const w = await api("weather"), c = w.current, d = w.daily;
       $("#weatherTemp").textContent = Math.round(c.temperature_2m) + "°";
       $("#weatherSummary").textContent = weatherText(c.weather_code);
       $(".weather-icon").textContent = weatherIcon(c.weather_code);

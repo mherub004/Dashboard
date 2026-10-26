@@ -13,6 +13,11 @@ OUTPUT = Path("/var/lib/mtech-infra/wireguard-status.json")
 
 
 def main():
+    try:
+        subprocess.run(["wg", "--version"], check=True, capture_output=True, timeout=5)
+    except FileNotFoundError:
+        raise SystemExit("The 'wg' command is missing. Install WireGuard tools on the host, then retry.")
+
     allowed = subprocess.run(
         ["wg", "show", "all", "allowed-ips"],
         check=True,
