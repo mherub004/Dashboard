@@ -282,7 +282,7 @@
   $("#today").textContent = new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(new Date()).toUpperCase();
   setView();
   (async () => {
-    try { const user = await api("session"); if (user.authenticated) { state.authenticated = true; await refresh(); } else signInScreen(); }
+    try { const user = await api("session"); if (user.authenticated) { $("#loginDialog").close(); state.authenticated = true; await refresh(); } else signInScreen(); }
     catch (error) { signInScreen(); $("#loginError").textContent = error.message; }
   })();
 })();

@@ -7,7 +7,7 @@
 <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/style.css?v=features-2"><script src="/assets/app.js?v=features-4" defer></script>
+<link rel="stylesheet" href="/assets/style.css?v=features-2"><script src="/assets/app.js?v=features-5" defer></script>
 </head>
 <body>
 <div class="ambient"></div>
@@ -58,7 +58,7 @@
 <footer><span><b>MTech <span class="accent">Infra</span></b> Your server at a glance.</span><span>PRIVATE WORKSPACE <i>·</i> YOUR INFRASTRUCTURE</span></footer>
 </div>
 </main>
-<dialog id="loginDialog"><div class="modal-content"><div class="modal-emblem">✳</div><div class="section-kicker">WELCOME BACK</div><h2>Sign in to your workspace</h2><p>Your infrastructure is private. Sign in to continue.</p><form id="loginForm"><label>Username<input name="username" autocomplete="username" value="admin" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><p class="form-error" id="loginError" role="alert"></p><button class="button primary full" type="submit">Sign in →</button></form><div class="modal-note">A private view of everything you run.</div></div></dialog>
+<dialog id="loginDialog" open><div class="modal-content"><div class="modal-emblem">✳</div><div class="section-kicker">WELCOME BACK</div><h2>Sign in to your workspace</h2><p>Your infrastructure is private. Sign in to continue.</p><form id="loginForm"><label>Username<input name="username" autocomplete="username" value="admin" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><p class="form-error" id="loginError" role="alert"></p><button class="button primary full" type="submit">Sign in →</button></form><div class="modal-note">A private view of everything you run.</div></div></dialog>
 <dialog id="editorDialog"><div class="modal-content"><button class="close" data-close aria-label="Close editor">×</button><div class="section-kicker">WORKSPACE EDITOR</div><h2>Manage your setup</h2><p>Add websites, domains and the services behind your work.</p><div class="tabs"><button class="tab active" data-tab="websites" type="button">Websites & domains</button><button class="tab" data-tab="services" type="button">Services</button></div><form id="editorForm"><div id="editorRows"></div><button class="add-row" id="editorAdd" type="button">＋ Add website</button><p class="form-error" id="editorError" role="alert"></p><div class="modal-actions"><button class="button quiet" data-close type="button">Cancel</button><button class="button primary" type="submit">Save changes</button></div></form></div></dialog>
 <dialog id="connectDialog"><div class="modal-content"><button class="close" data-close aria-label="Close connection instructions">×</button><div class="section-kicker">SERVER CONNECTION</div><h2>Meet your infrastructure</h2><p>Run the agent on your Linux Docker server. It sends metrics here every 30 seconds over HTTPS.</p><ol class="setup-steps"><li>Clone the repository on your server.<pre>git clone https://github.com/mherub004/Dashboard.git
 cd Dashboard
