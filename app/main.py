@@ -5,6 +5,7 @@ import logging
 import json
 import os
 import socket
+import struct
 from pathlib import Path
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -42,21 +43,46 @@ def network_counters():
     now = time.monotonic()
     elapsed = max(now - previous_interfaces_time, 0.1) if previous_interfaces_time is not None else 0
     interface_stats = []
+    link_stats, addresses = psutil.net_if_stats(), psutil.net_if_addrs()
     for name in active:
         item, prior = counters[name], (previous_interfaces or {}).get(name)
+        ips = []
+        for address in addresses.get(name, []):
+            if address.family == socket.AF_INET and address.address and not address.address.startswith("127."):
+                try:
+                    subnet = str(ipaddress.ip_interface(address.address + "/" + str(address.netmask)).network)
+                except ValueError:
+                    subnet = ""
+                ips.append({"ip": address.address, "subnet": subnet})
+        nic = link_stats.get(name)
         interface_stats.append({"name": name, "sent": item.bytes_sent, "received": item.bytes_recv,
             "up": round(max(0, item.bytes_sent - prior.bytes_sent) / elapsed) if prior and elapsed else 0,
-            "down": round(max(0, item.bytes_recv - prior.bytes_recv) / elapsed) if prior and elapsed else 0})
+            "down": round(max(0, item.bytes_recv - prior.bytes_recv) / elapsed) if prior and elapsed else 0,
+            "link_speed_mbps": nic.speed if nic and nic.speed > 0 else None,
+            "is_up": bool(nic.isup) if nic else False, "addresses": ips})
     previous_interfaces, previous_interfaces_time = counters, now
     return {"sent": sum(counters[name].bytes_sent for name in active),
         "received": sum(counters[name].bytes_recv for name in active), "interfaces": ", ".join(active),
         "interface_stats": interface_stats}
 
 
+def default_gateway():
+    routes = Path("/host/proc/net/route")
+    try:
+        for line in routes.read_text(encoding="utf-8").splitlines()[1:]:
+            fields = line.split()
+            if len(fields) >= 3 and fields[1] == "00000000":
+                return {"ip": socket.inet_ntoa(struct.pack("<I", int(fields[2], 16))), "interface": fields[0]}
+    except (OSError, ValueError, struct.error):
+        pass
+    return None
+
+
 def host_metrics():
     global previous_network, previous_time
     current = time.monotonic()
     network = network_counters()
+    network["gateway"] = default_gateway()
     elapsed = current - previous_time if previous_time is not None else 0
     network["up"] = max(0, network["sent"] - previous_network["sent"]) / elapsed if elapsed else 0
     network["down"] = max(0, network["received"] - previous_network["received"]) / elapsed if elapsed else 0

@@ -99,7 +99,17 @@
     $("#networkDown").textContent=bytes(net.down); $("#networkUp").textContent=bytes(net.up);
     $("#networkChartStart").textContent=state.networkHistory.length?new Date(state.networkHistory[0].at*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}):"Waiting for telemetry";
     const interfaces=net.interface_stats||[];
-    $("#interfaceRows").innerHTML=interfaces.length?interfaces.map(x=>"<tr><td>"+escape(x.name)+"</td><td class=network-down>↓ "+bytes(x.down)+"/s</td><td class=network-up>↑ "+bytes(x.up)+"/s</td><td>"+bytes(x.received)+"</td><td>"+bytes(x.sent)+"</td></tr>").join(""):'<tr><td colspan="5" class="network-empty">No interface counters reported. Check NETWORK_INTERFACES in the server agent.</td></tr>';
+    const rx=interfaces.reduce((sum,x)=>sum+(Number(x.down)||0),0)*8/1000000, tx=interfaces.reduce((sum,x)=>sum+(Number(x.up)||0),0)*8/1000000;
+    const linkSpeed=interfaces.reduce((sum,x)=>sum+(Number(x.link_speed_mbps)||0),0);
+    $("#rxSpeed").textContent=rx<10?rx.toFixed(2):rx.toFixed(1); $("#txSpeed").textContent=tx<10?tx.toFixed(2):tx.toFixed(1);
+    const scale=linkSpeed||Math.max(rx,tx,1);
+    $("#rxGauge").style.setProperty("--gauge",Math.min(100,rx/scale*100)*3.6+"deg");
+    $("#txGauge").style.setProperty("--gauge",Math.min(100,tx/scale*100)*3.6+"deg");
+    $("#speedContext").textContent=linkSpeed?"Detected Ethernet link · "+linkSpeed+" Mbps":"Ethernet link speed not reported by this adapter";
+    const local=interfaces.flatMap(x=>(x.addresses||[]).map(a=>({ip:a.ip,subnet:a.subnet,iface:x.name})));
+    const primary=local.find(x=>x.subnet&&!x.ip.startsWith("169.254.")), gateway=net.gateway?.ip;
+    $("#lanRouteHelp").textContent=primary?("LAN subnet to add to the WireGuard client Allowed IPs: "+primary.subnet+". Server/AdGuard DNS address: "+primary.ip+". Gateway: "+(gateway||"not detected")+"."):"Could not read the server’s private LAN subnet. Check that the agent can read host network details.";
+    $("#interfaceRows").innerHTML=interfaces.length?interfaces.map(x=>{const addr=(x.addresses||[]).find(a=>a.ip&&!a.ip.startsWith("169.254."));return "<tr><td>"+escape(x.name)+"</td><td>"+escape(addr?(addr.ip+(addr.subnet?" · "+addr.subnet:"")):"—")+"</td><td><span class=network-badge>"+(x.is_up?"UP":"DOWN")+"</span></td><td>"+(x.link_speed_mbps?Number(x.link_speed_mbps).toLocaleString()+" Mbps":"—")+"</td><td class=network-down>↓ "+bytes(x.down)+"/s</td><td class=network-up>↑ "+bytes(x.up)+"/s</td></tr>";}).join(""):'<tr><td colspan="6" class="network-empty">No interface counters reported. Check NETWORK_INTERFACES in the server agent.</td></tr>';
     const neighbors=d.devices||[], clientMap=new Map((dns.clients||[]).map(x=>[x.ip,x.count])), combined=new Map();
     neighbors.forEach(x=>combined.set(x.ip,{...x,queries:clientMap.get(x.ip)||0}));
     (dns.clients||[]).forEach(x=>{if(!combined.has(x.ip))combined.set(x.ip,{ip:x.ip,mac:"",interface:"",queries:x.count})});
@@ -210,13 +220,13 @@
   }
   function setView() {
     const view = location.hash.slice(1);
-    state.view = ["websites", "containers", "services", "network", "planner"].includes(view) ? view : "overview";
-    const titles = { overview: "Overview", websites: "Websites & domains", containers: "Docker containers", services: "Services", network: "Home network", planner: "Calendar & notes" };
+    state.view = ["websites", "containers", "services", "network", "dns", "planner"].includes(view) ? view : "overview";
+    const titles = { overview: "Overview", websites: "Websites & domains", containers: "Docker containers", services: "Services", network: "Home network", dns: "DNS activity", planner: "Calendar & notes" };
     $$(".nav-item").forEach(a => a.classList.toggle("active", a.dataset.view === state.view));
     $("#crumb").textContent = titles[state.view];
     $("#pageTitle").innerHTML = state.view === "overview" ? "Your infrastructure, <span>in focus.</span>" : escape(titles[state.view]) + " <span>at a glance.</span>";
-    $("#pageSubtitle").textContent = state.view === "overview" ? "Everything running behind your work. Right now." : { websites: "Know when your websites are reachable.", containers: "A clear view of every workload on your server.", services: "Keep your infrastructure services organized.", planner: "Plan ahead and keep notes for each day.", network: "Live server traffic, DNS, LAN devices and WireGuard peers." }[state.view];
-    $("#overviewView").classList.toggle("hidden", !["overview", "planner"].includes(state.view)); $("#listView").classList.toggle("hidden", ["overview", "planner", "network"].includes(state.view)); $("#networkView").classList.toggle("hidden", state.view !== "network");
+    $("#pageSubtitle").textContent = state.view === "overview" ? "Everything running behind your work. Right now." : { websites: "Know when your websites are reachable.", containers: "A clear view of every workload on your server.", services: "Keep your infrastructure services organized.", planner: "Plan ahead and keep notes for each day.", network: "Home LAN status, live link speed and WireGuard peer usage.", dns: "AdGuard Home query history, clients, and top domains." }[state.view];
+    $("#overviewView").classList.toggle("hidden", !["overview", "planner"].includes(state.view)); $("#listView").classList.toggle("hidden", ["overview", "planner", "network", "dns"].includes(state.view)); $("#networkView").classList.toggle("hidden", state.view !== "network"); $("#dnsView").classList.toggle("hidden", state.view !== "dns");
     $(".feature-grid > .panel").forEach(panel => panel.classList.toggle("hidden", state.view === "planner" && !panel.classList.contains("planner-panel")));
     $("#sidebar").classList.remove("open"); $("#mobileMenu").setAttribute("aria-expanded", "false");
     renderList(); requestAnimationFrame(()=>{drawChart();drawNetworkChart();drawDnsChart(state.data?.dns||{})});
@@ -326,7 +336,7 @@
   $("#saveNote").addEventListener("click",async()=>{const note=$("#dayNote").value.trim();try{await api("notes",{method:"PUT",body:JSON.stringify({date:state.selectedDate,note})});if(note)state.notes[state.selectedDate]=note;else delete state.notes[state.selectedDate];renderCalendar();toast("Note saved");}catch(e){toast(e.message)}});
   $("#mobileMenu").addEventListener("click", () => { const open = $("#sidebar").classList.toggle("open"); $("#mobileMenu").setAttribute("aria-expanded", String(open)); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); else clearTimeout(poll); });
-  window.addEventListener("resize", drawChart); window.addEventListener("hashchange", setView);
+  window.addEventListener("resize",()=>{drawChart();drawNetworkChart();drawDnsChart(state.data?.dns||{})}); window.addEventListener("hashchange", setView);
   $("#today").textContent = new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(new Date()).toUpperCase();
   setView();
   (async () => {

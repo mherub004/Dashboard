@@ -80,7 +80,12 @@ export function validateTelemetry(data) {
       disk: number(h.disk, 100), disk_used: number(h.disk_used), disk_total: number(h.disk_total),
       uptime: number(h.uptime),
       network: { sent: number(n.sent), received: number(n.received), up: number(n.up), down: number(n.down), interfaces: text(n.interfaces, 200),
-        interface_stats: Array.isArray(n.interface_stats) ? n.interface_stats.slice(0, 32).map(x => ({name:text(x.name,32), sent:number(x.sent), received:number(x.received), up:number(x.up), down:number(x.down)})) : [] }
+        interface_stats: Array.isArray(n.interface_stats) ? n.interface_stats.slice(0, 32).map(x => ({
+          name:text(x.name,32), sent:number(x.sent), received:number(x.received), up:number(x.up), down:number(x.down),
+          link_speed_mbps:x.link_speed_mbps==null?null:number(x.link_speed_mbps), is_up:x.is_up===true,
+          addresses:Array.isArray(x.addresses)?x.addresses.slice(0,8).map(a=>({ip:text(a.ip,64),subnet:text(a.subnet,64)})):[]
+        })) : [],
+        gateway:n.gateway&&typeof n.gateway==="object"?{ip:text(n.gateway.ip,64),interface:text(n.gateway.interface,32)}:null }
     },
     docker_available: data.docker_available === true,
     docker_error: data.docker_available === true ? null : ["permission_denied", "socket_missing", "daemon_unreachable"].includes(data.docker_error) ? data.docker_error : "unknown",
