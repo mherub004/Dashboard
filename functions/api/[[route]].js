@@ -85,7 +85,13 @@ export function validateTelemetry(data) {
     containers: data.containers.slice(0, 100).map(c => ({
       id: text(c.id, 16), name: text(c.name), status: text(c.status, 24), cpu: number(c.cpu), memory: number(c.memory),
       image: text(c.image, 160), stats_available: c.stats_available === true
-    }))
+    })),
+    vpn_peers: Array.isArray(data.vpn_peers) ? data.vpn_peers.slice(0, 100).map(p => ({
+      name: text(p.name, 80), ip: text(p.ip, 64), online: p.online === true,
+      last_seen: typeof p.last_seen === "string" && !Number.isNaN(Date.parse(p.last_seen)) ? new Date(p.last_seen).toISOString() : null
+    })) : null,
+    vpn_error: data.vpn_error === "unavailable" ? "unavailable" : data.vpn_error === "not_configured" ? "not_configured" : null,
+    backup: data.backup && typeof data.backup === "object" ? { last_success: data.backup.last_success == null ? null : number(data.backup.last_success) } : null
   };
 }
 async function configuration(db) {
@@ -131,8 +137,17 @@ export async function onRequest({ request, env }) {
       if (!env.AGENT_TOKEN || !equal(await digest(supplied), await digest("Bearer " + env.AGENT_TOKEN))) fail("Invalid agent token", 401);
       await rateLimit(env.DB, "agent", 12, 60);
       const report = validateTelemetry(await body(request));
-      await env.DB.prepare("INSERT INTO telemetry(id,data,received_at) VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data,received_at=excluded.received_at")
-        .bind(JSON.stringify(report), now()).run();
+      const writes = [env.DB.prepare("INSERT INTO telemetry(id,data,received_at) VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data,received_at=excluded.received_at").bind(JSON.stringify(report), now())];
+      const backupTime = report.backup?.last_success;
+      if (backupTime) {
+        const row = await env.DB.prepare("SELECT value FROM settings WHERE id='backup_history'").first();
+        const history = row ? JSON.parse(row.value) : [];
+        if (!history.some(value => value === backupTime)) {
+          history.unshift(backupTime);
+          writes.push(env.DB.prepare("INSERT INTO settings(id,value) VALUES('backup_history',?) ON CONFLICT(id) DO UPDATE SET value=excluded.value").bind(JSON.stringify(history.slice(0, 30))));
+        }
+      }
+      await env.DB.batch(writes);
       return json({ accepted: true });
     }
     if (!["GET", "HEAD"].includes(method)) {
@@ -209,7 +224,8 @@ export async function onRequest({ request, env }) {
       for (let i = 0; i < config.websites.length; i += 4) {
         websites.push(...await Promise.all(config.websites.slice(i, i + 4).map(s => checkSite(s, env.DB))));
       }
-      return json({ ...metrics, agent_connected: live, received_at: report?.received_at || null, websites, services: config.services, checked_at: new Date().toISOString() });
+      const history = await env.DB.prepare("SELECT value FROM settings WHERE id='backup_history'").first();
+      return json({ ...metrics, backup_history: history ? JSON.parse(history.value) : [], agent_connected: live, received_at: report?.received_at || null, websites, services: config.services, checked_at: new Date().toISOString() });
     }
     return json({ detail: "Endpoint not found" }, 404);
   } catch (error) {

@@ -147,7 +147,16 @@
     $("#storageUsed").textContent=h?bytes(h.disk_used)+" used":"Waiting for server";
     $("#storageTotal").textContent=h?bytes(h.disk_total)+" total · OS filesystem":"Disk usage updates with server telemetry.";
     $("#storageRing").style.setProperty("--used",h?Math.min(100,h.disk)+"%":"0%");
-    $("#backupStatus").textContent="No backup report from agent";
+    const peers=d.vpn_peers;
+    $("#vpnPeerCount").textContent=Array.isArray(peers)?peers.filter(p=>p.online).length+" online":"—";
+    $("#vpnPeerList").innerHTML=Array.isArray(peers)?(peers.length?peers.map(p=>'<div class="peer-row"><i class="dot '+(p.online?"":"offline")+'"></i><span><b>'+escape(p.name)+'</b><small>'+escape(p.ip||"No IP reported")+'</small></span><em>'+escape(p.online?"Connected":p.last_seen?"Seen "+new Date(p.last_seen).toLocaleString():"Offline")+'</em></div>').join(""):empty("No devices are listed in this Tailnet.")):'<div class="integration-empty"><span class="integration-badge">'+(d.vpn_error==="unavailable"?"CHECK TAILSCALE SETTINGS":"AGENT SETUP NEEDED")+'</span><p>'+(d.vpn_error==="unavailable"?"The agent could not read this Tailnet. Check the OAuth client scope and tailnet name.":"Add a read-only Tailscale OAuth client to the server agent to see devices, IPs and last seen time.")+'</p></div>';
+    const backupTime=d.backup?.last_success;
+    const backupAge=backupTime?Math.floor(Date.now()/1000-backupTime):null;
+    $("#backupStatus").textContent=backupTime?"Last success · "+(backupAge<3600?Math.max(1,Math.floor(backupAge/60))+"m ago":backupAge<86400?Math.floor(backupAge/3600)+"h ago":Math.floor(backupAge/86400)+"d ago"):d.backup?"Marker file not found":"Not configured";
+    const backupDot=$("#backupStatus").previousElementSibling;
+    backupDot.className="dot "+(backupAge==null?"neutral":backupAge<86400?"":"offline");
+    const history=d.backup_history||[];
+    $("#backupTimeline").innerHTML=history.length?'<div class="backup-history-title">RECENT SUCCESSFUL BACKUPS</div>'+history.slice(0,5).map(t=>'<div class="backup-event"><i></i><span>'+escape(new Date(t*1000).toLocaleString())+'</span></div>').join(""):empty("Configure a backup success marker to start the timeline.");
     if(!state.extrasLoaded){state.extrasLoaded=true;renderCalendar();loadWeather();loadGitActivity();api("notes").then(x=>{state.notes=x.notes||{};renderCalendar()}).catch(()=>{});}
   }
   function setView() {

@@ -94,7 +94,7 @@ This deployment uses Cloudflare Pages and D1 with free-tier usage in mind. No pa
 
 The overview includes an Open-Meteo forecast for Erlangen, shortcuts and availability checks for configured websites, and recent public commits from this repository. The calendar stores dated notes in the private D1 database behind the admin session. GitHub activity is public repository metadata and is fetched from the browser. The storage card reports the monitored host's OS filesystem usage.
 
-VPN peer details and backup history are not collected by the current host agent. Their cards show setup or reporting status and do not infer that peers or backups are healthy.
+The agent can optionally read Tailscale device status through a read-only OAuth client and track successful backup marker timestamps. WireGuard is not integrated. The backup marker must only be updated after the backup command succeeds.
 
 ## Docker troubleshooting
 
@@ -117,3 +117,15 @@ docker compose logs -f agent
 ~~~
 
 The dashboard reports a specific Docker socket error. For rootless Docker, set DOCKER_SOCKET and DOCKER_HOST to the daemon's actual socket, often `/run/user/<user-id>/docker.sock`, and set DOCKER_GID to that socket's group. Restart the agent after any .env change.
+
+### Enable Tailscale peers and backup history
+
+On the Tailscale admin console, create an OAuth client with only the `devices:core:read` scope. Copy its client ID and secret into the server's untracked `.env`, and set `TAILSCALE_TAILNET` to your tailnet name or domain. The agent requests short-lived read tokens and polls device status every five minutes. Keep the client secret private and revoke the OAuth client if it is exposed.
+
+To track backups, set `BACKUP_HEARTBEAT_FILE` in `.env` to an absolute path on the host. Make the marker readable to the agent. Your backup script must touch it only after a successful backup, for example:
+
+~~~bash
+your-backup-command && sudo touch /var/lib/mtech-infra/backup-success
+~~~
+
+Create the marker directory with read/traverse permissions for the agent, set `BACKUP_HEARTBEAT_FILE=/var/lib/mtech-infra/backup-success`, and recreate the agent. Each new marker timestamp is recorded in the dashboard's D1 history.
