@@ -206,17 +206,17 @@ def wireguard_metrics():
     def peers_from_output(allowed, handshakes, transfers):
         last_handshake = {}
         for line in handshakes.splitlines():
-            fields = line.split("\\t")
+            fields = line.split("\t")
             if len(fields) >= 3:
                 last_handshake[(fields[0], fields[1])] = int(fields[2] or 0)
         byte_counts = {}
         for line in transfers.splitlines():
-            fields = line.split("\\t")
+            fields = line.split("\t")
             if len(fields) >= 4:
                 byte_counts[(fields[0], fields[1])] = (int(fields[2] or 0), int(fields[3] or 0))
         peers = []
         for line in allowed.splitlines():
-            fields = line.split("\\t", 2)
+            fields = line.split("\t", 2)
             if len(fields) < 3:
                 continue
             interface, public_key, allowed_ips = fields

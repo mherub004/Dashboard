@@ -7,7 +7,7 @@
 <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/style.css?v=network-1"><script src="/assets/app.js?v=network-1" defer></script>
+<link rel="stylesheet" href="/assets/style.css?v=admin-fix-1"><script src="/assets/app.js?v=admin-fix-1" defer></script>
 </head>
 <body>
 <div class="ambient"></div>
@@ -21,6 +21,7 @@
 <a href="#containers" class="nav-item" data-view="containers"><span>▦</span>Containers</a>
 <a href="#network" class="nav-item" data-view="network"><span>⌁</span>Home network</a>
 <a href="#services" class="nav-item" data-view="services"><span>◇</span>Services</a>
+<button class="nav-item admin-nav-item" type="button" data-action="account"><span>⚙</span>Admin & security</button>
 <a href="#planner" class="nav-item" data-view="planner"><span>▣</span>Planner</a>
 </nav>
 <div class="sidebar-bottom"><button class="server-card" data-action="connect"><span class="accent">✳</span><div><b id="connectionLabel">Connect your server</b><small id="connectionSub">Ready when you are</small></div><i class="dot neutral" id="serverDot"></i></button>
@@ -63,7 +64,7 @@
 <article class="panel network-wide"><div class="panel-head"><div><div class="section-kicker">ADGUARD HOME · RECENT ACTIVITY</div><h2>Recent DNS requests <span class="count" id="queryLogCount">0</span></h2></div><span class="network-live" id="queryLogStatus">WAITING</span></div><div class="network-table-scroll"><table class="network-table"><thead><tr><th>TIME</th><th>DOMAIN REQUESTED</th><th>CLIENT IP</th><th>RESULT</th></tr></thead><tbody id="queryLogRows"></tbody></table></div><p class="network-note">DNS requests show domains looked up by devices; they do not prove a page was opened. Devices using private DNS may not appear here.</p></article>
 <article class="panel network-wide"><div class="panel-head"><div><div class="section-kicker">SERVER NETWORK ADAPTERS</div><h2>Interface traffic</h2></div></div><div class="network-table-scroll"><table class="network-table"><thead><tr><th>INTERFACE</th><th>DOWNLOAD</th><th>UPLOAD</th><th>RECEIVED TOTAL</th><th>SENT TOTAL</th></tr></thead><tbody id="interfaceRows"></tbody></table></div></article>
 <article class="panel network-wide"><div class="panel-head"><div><div class="section-kicker">HOME LAN</div><h2>Devices seen on network <span class="count" id="lanDeviceCount">0</span></h2></div></div><div class="network-table-scroll"><table class="network-table"><thead><tr><th>DEVICE / IP</th><th>MAC</th><th>INTERFACE</th><th>DNS QUERIES</th><th>VISIBILITY</th></tr></thead><tbody id="lanDeviceRows"></tbody></table></div><p class="network-note">This combines the server’s recent neighbor cache with AdGuard Home client activity. It does not claim per-device bandwidth.</p></article>
-<article class="panel network-wide"><div class="panel-head"><div><div class="section-kicker">WIREGUARD · VPN</div><h2>Peers and transfer usage <span class="count" id="networkVpnCount">—</span></h2></div></div><div class="network-table-scroll"><table class="network-table"><thead><tr><th>PEER</th><th>TUNNEL IP</th><th>LAST HANDSHAKE</th><th>RECEIVED</th><th>SENT</th><th>STATUS</th></tr></thead><tbody id="networkPeerRows"></tbody></table></div></article>
+<article class="panel network-wide"><div class="panel-head"><div><div class="section-kicker">WIREGUARD · VPN</div><h2>Peers and transfer usage <span class="count" id="networkVpnCount">—</span></h2></div></div><div class="network-table-scroll"><table class="network-table"><thead><tr><th>PEER</th><th>TUNNEL IP</th><th>LAST HANDSHAKE</th><th>RECEIVED TOTAL</th><th>SENT TOTAL</th><th>RX RATE</th><th>TX RATE</th><th>STATUS</th></tr></thead><tbody id="networkPeerRows"></tbody></table></div></article>
 <div class="network-info">Per-device download/upload requires router client counters or flow export. A single public IPv6 address and the WireGuard port do not provide those measurements. Cloudflare Pages displays private telemetry sent by the home server agent.</div>
 </div>
 </section>
@@ -75,7 +76,7 @@
 <dialog id="connectDialog"><div class="modal-content"><button class="close" data-close aria-label="Close connection instructions">×</button><div class="section-kicker">SERVER CONNECTION</div><h2>Meet your infrastructure</h2><p>Run the agent on your Linux Docker server. It sends metrics here every 30 seconds over HTTPS.</p><ol class="setup-steps"><li>Clone the repository on your server.<pre>git clone https://github.com/mherub004/Dashboard.git
 cd Dashboard
 cp .env.example .env</pre></li><li>Copy your connection settings into <code>.env</code>.<label>Agent token<input id="agentToken" type="password" readonly autocomplete="off"></label><button class="button quiet" id="copyAgent" type="button">Copy connection settings</button></li><li>Set <code>DOCKER_GID</code> from this command, then start the agent.<pre>stat -c '%g' /var/run/docker.sock
-docker compose up -d --build</pre></li></ol><div class="modal-note">The token grants permission to send telemetry. Keep it private. No public server port is needed.</div></div></dialog>
+docker compose up -d --build</pre></li></ol><div class="modal-note">The token grants permission to send telemetry. Keep it private. No public server port is needed. Open the dashboard at https://dashboard.iamahsan.org; the server IP itself does not host the dashboard website.</div></div></dialog>
 <dialog id="accountDialog"><div class="modal-content"><button class="close" data-close aria-label="Close account settings">×</button><div class="section-kicker">ADMIN ACCOUNT</div><h2>Keep your workspace yours</h2><p>Change your password here. Updating it signs out all sessions.</p><form id="passwordForm"><label>Current password<input name="current_password" type="password" autocomplete="current-password" required></label><label>New password<input name="new_password" type="password" autocomplete="new-password" minlength="16" maxlength="128" required></label><label>Confirm new password<input name="confirm_password" type="password" autocomplete="new-password" minlength="16" required></label><p class="form-error" id="passwordError" role="alert"></p><button class="button primary full" type="submit">Update password</button></form><div class="modal-note"><button class="text-button" id="logout" type="button">Sign out →</button></div></div></dialog>
 <div id="toast" role="status"></div>
 </body>

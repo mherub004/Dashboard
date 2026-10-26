@@ -247,3 +247,5 @@ dialog { background:#fff; box-shadow:0 25px 100px #273d5c38; }
 .network-ok{background:#dff5ec;color:#27876b}
 .network-info{padding:13px 15px;border:1px solid #d9c89a;border-radius:9px;background:#fff7df;color:#786135;font-size:10px;line-height:1.55}
 @media(max-width:800px){.network-grid{grid-template-columns:1fr}.network-wide,.network-info{grid-column:auto}.network-traffic-panel,.network-dns-panel{min-height:270px}}
+
+.admin-nav-item{width:100%;border:0;background:transparent;text-align:left;font:inherit;cursor:pointer}

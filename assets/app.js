@@ -2,7 +2,7 @@
   "use strict";
   const $ = s => document.querySelector(s);
   const $$ = s => [...document.querySelectorAll(s)];
-  const state = { authenticated: false, data: null, view: "overview", history: [], networkHistory: [], busy: false, draft: null, tab: "websites", connection: null, notes: {}, selectedDate: (()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")})(), calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1), extrasLoaded: false };
+  const state = { authenticated: false, data: null, view: "overview", history: [], networkHistory: [], peerSamples: { at: 0, rows: {} }, peerRates: {}, busy: false, draft: null, tab: "websites", connection: null, notes: {}, selectedDate: (()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")})(), calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1), extrasLoaded: false };
   let poll, toastTimer;
   const escape = v => String(v ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
   const bytes = value => {
@@ -45,7 +45,7 @@
       $("#lastUpdated").textContent = "Updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       $("#syncDot").className = "dot"; $("#syncLabel").textContent = "SYNCED";
     } catch (error) {
-      if (error.status === 401) { location.reload(); return; }
+      if (error.status === 401) { signInScreen(); $("#loginError").textContent = "Your session expired. Sign in again to continue."; return; }
       $("#pageError").textContent = error.message; $("#pageError").classList.remove("hidden");
       $("#syncDot").className = "dot offline"; $("#syncLabel").textContent = "OFFLINE";
       $("#lastUpdated").textContent = "Sync unavailable";
@@ -117,8 +117,14 @@
     $("#queryLogCount").textContent=queries.length;
     $("#queryLogRows").innerHTML=queries.length?queries.map(q=>"<tr><td>"+escape(q.time?new Date(q.time).toLocaleTimeString():"—")+"</td><td>"+escape(q.domain||"—")+"</td><td>"+escape(q.client||"—")+"</td><td>"+escape(q.reason||q.status||"Resolved")+"</td></tr>").join(""):'<tr><td colspan="4" class="network-empty">'+(dns.available?"No recent DNS requests, or AdGuard query logging is disabled.":"Connect AdGuard Home in the server agent .env file.")+'</td></tr>';
     const peers=d.vpn_peers||[];
+    if(d.received_at&&d.received_at!==state.peerSamples.at){
+      const elapsed=state.peerSamples.at?Math.max(1,d.received_at-state.peerSamples.at):0, next={};
+      peers.forEach(p=>{const key=p.ip||p.name,old=state.peerSamples.rows[key];next[key]={received:Number(p.received)||0,sent:Number(p.sent)||0};
+        state.peerRates[key]=old&&elapsed?{received:Math.max(0,next[key].received-old.received)/elapsed,sent:Math.max(0,next[key].sent-old.sent)/elapsed}:{received:null,sent:null};});
+      state.peerSamples={at:d.received_at,rows:next};
+    }
     $("#networkVpnCount").textContent=Array.isArray(peers)?String(peers.length):"—";
-    $("#networkPeerRows").innerHTML=Array.isArray(peers)&&peers.length?peers.map(p=>"<tr><td>"+escape(p.name)+"</td><td>"+escape(p.ip||"—")+"</td><td>"+escape(p.last_seen?new Date(p.last_seen).toLocaleString():"Never")+"</td><td>"+bytes(p.received)+"</td><td>"+bytes(p.sent)+"</td><td><span class=network-badge>"+(p.online?"Recent handshake":"Inactive")+"</span></td></tr>").join(""):'<tr><td colspan="6" class="network-empty">No WireGuard peers reported. Check the host WireGuard helper.</td></tr>';
+    $("#networkPeerRows").innerHTML=Array.isArray(peers)&&peers.length?peers.map(p=>{const r=state.peerRates[p.ip||p.name]||{};return "<tr><td>"+escape(p.name)+"</td><td>"+escape(p.ip||"—")+"</td><td>"+escape(p.last_seen?new Date(p.last_seen).toLocaleString():"Never")+"</td><td>"+bytes(p.received)+"</td><td>"+bytes(p.sent)+"</td><td class=network-down>"+(r.received==null?"—":bytes(r.received)+"/s")+"</td><td class=network-up>"+(r.sent==null?"—":bytes(r.sent)+"/s")+"</td><td><span class=network-badge>"+(p.online?"Recent handshake":"Inactive")+"</span></td></tr>";}).join(""):'<tr><td colspan="8" class="network-empty">No WireGuard peers reported. Check that the agent is rebuilt with WIREGUARD_CONTAINER=wg-easy.</td></tr>';
     drawNetworkChart(); drawDnsChart(dns);
   }
   function drawNetworkChart() {
@@ -191,7 +197,7 @@
     $("#storageTotal").textContent=h?bytes(h.disk_total)+" total · OS filesystem":"Disk usage updates with server telemetry.";
     $("#storageRing").style.setProperty("--used",h?Math.min(100,h.disk)+"%":"0%");
     const peers=d.vpn_peers;
-    $("#vpnPeerCount").textContent=Array.isArray(peers)?peers.filter(p=>p.online).length+" recent":"—";
+    $("#vpnPeerCount").textContent=Array.isArray(peers)?peers.length+" peer"+(peers.length===1?"":"s")+" · "+peers.filter(p=>p.online).length+" recent":"—";
     $("#vpnPeerList").innerHTML=Array.isArray(peers)?(peers.length?peers.map(p=>'<div class="peer-row"><i class="dot '+(p.online?"":"offline")+'"></i><span><b>'+escape(p.name)+'</b><small>'+escape(p.ip||"No IP reported")+'</small></span><em>'+escape(p.online?"Recent handshake":p.last_seen?"Last handshake "+new Date(p.last_seen).toLocaleString():"No handshake yet")+'</em></div>').join(""):empty("No peers are listed on the host WireGuard interfaces.")):'<div class="integration-empty"><span class="integration-badge">'+(d.vpn_error==="unavailable"?"CHECK WIREGUARD HELPER":"AGENT SETUP NEEDED")+'</span><p>'+(d.vpn_error==="unavailable"?"The agent cannot read the WireGuard snapshot. Check the host helper and file path.":"Install the WireGuard status helper on the host to see peer IPs and latest handshakes.")+'</p></div>';
     const backupTime=d.backup?.last_success;
     const backupAge=backupTime?Math.floor(Date.now()/1000-backupTime):null;

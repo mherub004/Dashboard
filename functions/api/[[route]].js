@@ -5,6 +5,7 @@ const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(dat
 });
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }); };
 const now = () => Math.floor(Date.now() / 1000);
+const SESSION_TTL = 30 * 24 * 60 * 60;
 const hex = bytes => Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, "0")).join("");
 async function digest(value) { return hex(await crypto.subtle.digest("SHA-256", encoder.encode(value))); }
 async function passwordHash(password, salt = crypto.randomUUID()) {
@@ -21,7 +22,7 @@ function equal(a, b) {
 function cookieToken(request) {
   return (request.headers.get("Cookie") || "").split(";").map(x => x.trim()).find(x => x.startsWith(COOKIE + "="))?.slice(COOKIE.length + 1) || "";
 }
-function cookie(token, maxAge) { return COOKIE + "=" + token + "; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=" + maxAge; }
+function cookie(token, maxAge) { return COOKIE + "=" + token + "; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=" + maxAge; }
 async function session(request, db) {
   const token = cookieToken(request);
   if (!/^[a-f0-9]{64}$/.test(token)) return null;
@@ -180,12 +181,17 @@ export async function onRequest({ request, env }) {
       await env.DB.batch([
         env.DB.prepare("DELETE FROM sessions WHERE expires<=?").bind(now()),
         env.DB.prepare("DELETE FROM rate_limits WHERE expires<=?").bind(now()),
-        env.DB.prepare("INSERT INTO sessions(token_hash,expires) VALUES(?,?)").bind(await digest(token), now() + 43200)
+        env.DB.prepare("INSERT INTO sessions(token_hash,expires) VALUES(?,?)").bind(await digest(token), now() + SESSION_TTL)
       ]);
-      return json({ authenticated: true, username: "admin" }, 200, { "Set-Cookie": cookie(token, 43200) });
+      return json({ authenticated: true, username: "admin" }, 200, { "Set-Cookie": cookie(token, SESSION_TTL) });
     }
     const current = await session(request, env.DB);
-    if (path === "/api/session" && method === "GET") return json({ authenticated: !!current, username: current ? "admin" : null });
+    if (path === "/api/session" && method === "GET") {
+      if (!current) return json({ authenticated: false, username: null });
+      const token = cookieToken(request);
+      await env.DB.prepare("UPDATE sessions SET expires=? WHERE token_hash=?").bind(now() + SESSION_TTL, current.token_hash).run();
+      return json({ authenticated: true, username: "admin" }, 200, { "Set-Cookie": cookie(token, SESSION_TTL) });
+    }
     if (!current) fail("Sign in to continue", 401);
     if (path === "/api/weather" && method === "GET") {
       const controller = new AbortController();
