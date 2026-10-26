@@ -185,6 +185,21 @@ export async function onRequest({ request, env }) {
       ]);
       return json(config);
     }
+    if (path === "/api/notes" && method === "GET") {
+      const row = await env.DB.prepare("SELECT value FROM settings WHERE id='notes'").first();
+      return json({ notes: row ? JSON.parse(row.value) : {} });
+    }
+    if (path === "/api/notes" && method === "PUT") {
+      const input = await body(request);
+      const date = typeof input.date === "string" ? new Date(input.date + "T12:00:00.000Z") : null;
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(input.date) || Number.isNaN(date.getTime()) || date.toISOString().slice(0,10) !== input.date) fail("Choose a valid calendar date");
+      if (typeof input.note !== "string" || input.note.length > 2000) fail("Notes can be up to 2,000 characters");
+      const row = await env.DB.prepare("SELECT value FROM settings WHERE id='notes'").first();
+      const notes = row ? JSON.parse(row.value) : {};
+      if (input.note.trim()) notes[input.date] = input.note.trim(); else delete notes[input.date];
+      await env.DB.prepare("INSERT INTO settings(id,value) VALUES('notes',?) ON CONFLICT(id) DO UPDATE SET value=excluded.value").bind(JSON.stringify(notes)).run();
+      return json({ saved: true, date: input.date });
+    }
     if (path === "/api/overview" && method === "GET") {
       const config = await configuration(env.DB);
       const report = await env.DB.prepare("SELECT data,received_at FROM telemetry WHERE id=1").first();

@@ -7,7 +7,7 @@
 <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/style.css?v=light-2"><script src="/assets/app.js" defer></script>
+<link rel="stylesheet" href="/assets/style.css?v=features-1"><script src="/assets/app.js?v=features-1" defer></script>
 </head>
 <body>
 <div class="ambient"></div>
@@ -20,6 +20,7 @@
 <a href="#websites" class="nav-item" data-view="websites"><span>◎</span>Websites <em id="siteCount">0</em></a>
 <a href="#containers" class="nav-item" data-view="containers"><span>▦</span>Containers</a>
 <a href="#services" class="nav-item" data-view="services"><span>◇</span>Services</a>
+<a href="#planner" class="nav-item" data-view="planner"><span>▣</span>Planner</a>
 </nav>
 <div class="sidebar-bottom"><button class="server-card" data-action="connect"><span class="accent">✳</span><div><b id="connectionLabel">Connect your server</b><small id="connectionSub">Ready when you are</small></div><i class="dot neutral" id="serverDot"></i></button>
 <button class="profile" data-action="account"><span class="avatar">A</span><span><b>Admin</b><small>Administrator</small></span><span class="profile-more">···</span></button></div>
@@ -43,6 +44,15 @@
 <section class="panel"><div class="panel-head"><div><div class="section-kicker">WORKLOADS</div><h2>Docker containers <span class="count" id="containerCount">0</span></h2></div><a href="#containers" class="panel-link">View all <span>→</span></a></div><div id="containerList"><div class="empty">Connect your agent to see containers.</div></div><div class="panel-bottom"><span id="dockerStatus">Docker connection pending</span><a href="#containers">Explore containers →</a></div></section>
 <section class="panel"><div class="panel-head"><div><div class="section-kicker">YOUR STACK</div><h2>Services</h2></div><button class="quiet-button" id="addService">＋ Add</button></div><div id="serviceList"><div class="empty">Add your infrastructure services.</div></div><div class="panel-note">Service status is maintained by you.</div></section>
 </div>
+
+<section class="feature-grid" aria-label="Personal dashboard tools">
+<article class="panel weather-panel"><div class="panel-head"><div><div class="section-kicker">ERLANGEN · LIVE WEATHER</div><h2>Outside right now</h2></div><span class="feature-icon weather-icon">☀</span></div><div class="weather-main"><strong id="weatherTemp">—°</strong><span id="weatherSummary">Loading local forecast…</span></div><div class="weather-meta"><span id="weatherRain">Rain —</span><span id="weatherHighLow">Today — / —</span></div><div class="forecast-strip" id="weatherForecast"></div></article>
+<article class="panel shortcuts-panel"><div class="panel-head"><div><div class="section-kicker">YOUR HOMEPAGE</div><h2>Quick launch</h2></div><a href="#websites" class="panel-link">Manage →</a></div><div class="shortcut-grid" id="shortcutGrid"><div class="empty">Add websites to create shortcuts.</div></div></article>
+<article class="panel git-panel"><div class="panel-head"><div><div class="section-kicker">GITHUB · PUBLIC ACTIVITY</div><h2>Latest commits</h2></div><a href="https://github.com/mherub004/Dashboard/commits/main" target="_blank" rel="noopener noreferrer" class="panel-link">Repository →</a></div><div id="gitActivity" class="feed-list"><div class="empty">Loading repository activity…</div></div></article>
+<article class="panel vpn-panel"><div class="panel-head"><div><div class="section-kicker">PRIVATE NETWORK</div><h2>VPN peers</h2><span class="feature-icon vpn-icon">⌁</span></div></div><div class="integration-empty"><span class="integration-badge">AGENT SETUP NEEDED</span><p>Peer status appears here after Tailscale or WireGuard reporting is enabled on your server.</p></div><div class="panel-note">No VPN devices or IPs are guessed or exposed.</div></article>
+<article class="panel storage-panel"><div class="panel-head"><div><div class="section-kicker">SERVER STORAGE</div><h2>Disk & backup health</h2></div><span class="feature-icon storage-icon">◉</span></div><div class="storage-content"><div class="storage-ring" id="storageRing"><strong id="storagePercent">—</strong><small>USED</small></div><div class="storage-copy"><b id="storageUsed">Waiting for server</b><small id="storageTotal">Disk usage updates with server telemetry.</small><div class="backup-state"><i class="dot neutral"></i><span id="backupStatus">Backup status not reported</span></div></div></div><div class="panel-note">OS disk usage · last backup check needs agent setup</div></article>
+<article class="panel planner-panel"><div class="panel-head"><div><div class="section-kicker">PERSONAL PLANNER</div><h2>Calendar & notes</h2></div><span class="feature-icon planner-icon">▦</span></div><div class="planner-layout"><div class="calendar"><div class="calendar-head"><button class="quiet-button" id="monthPrev" aria-label="Previous month">‹</button><b id="calendarMonth"></b><button class="quiet-button" id="monthNext" aria-label="Next month">›</button></div><div class="calendar-grid calendar-weekdays"><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span></div><div class="calendar-grid" id="calendarDays"></div></div><div class="note-editor"><label for="dayNote"><span id="noteDateLabel">Select a date</span><small>Private to your admin account</small></label><textarea id="dayNote" maxlength="2000" placeholder="Write a note for this date…"></textarea><button class="button primary" id="saveNote">Save note</button></div></div></article>
+</section>
 </div>
 <section class="hidden" id="listView"><div class="list-heading"><div><div class="section-kicker" id="listKicker"></div><h2 id="listTitle"></h2><p id="listDescription"></p></div><button class="button primary" id="listAdd">＋ Add</button></div><div class="panel table-panel"><div id="listTable"></div></div></section>
 <footer><span><b>MTech <span class="accent">Infra</span></b> Your server at a glance.</span><span>PRIVATE WORKSPACE <i>·</i> YOUR INFRASTRUCTURE</span></footer>

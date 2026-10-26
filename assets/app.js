@@ -2,7 +2,7 @@
   "use strict";
   const $ = s => document.querySelector(s);
   const $$ = s => [...document.querySelectorAll(s)];
-  const state = { authenticated: false, data: null, view: "overview", history: [], busy: false, draft: null, tab: "websites", connection: null };
+  const state = { authenticated: false, data: null, view: "overview", history: [], busy: false, draft: null, tab: "websites", connection: null, notes: {}, selectedDate: (()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")})(), calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1), extrasLoaded: false };
   let poll, toastTimer;
   const escape = v => String(v ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
   const bytes = value => {
@@ -40,7 +40,7 @@
     $("#refresh").disabled = true;
     try {
       const data = await api("overview");
-      state.data = data; render();
+      state.data = data; render(); renderFeatures(data);
       $("#pageError").classList.add("hidden");
       $("#lastUpdated").textContent = "Updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       $("#syncDot").className = "dot"; $("#syncLabel").textContent = "SYNCED";
@@ -105,20 +105,66 @@
       else { ctx.beginPath(); points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); }
     }
   }
+
+  const weatherText = code => ({0:"Clear sky",1:"Mostly clear",2:"Partly cloudy",3:"Overcast",45:"Foggy",48:"Icy fog",51:"Light drizzle",53:"Drizzle",55:"Heavy drizzle",61:"Light rain",63:"Rain",65:"Heavy rain",71:"Light snow",73:"Snow",75:"Heavy snow",80:"Rain showers",81:"Rain showers",82:"Heavy showers",95:"Thunderstorms",96:"Thunderstorms",99:"Severe thunderstorms"})[code] || "Conditions updated";
+  const weatherIcon = code => code === 0 ? "☀" : [1,2].includes(code) ? "⛅" : [71,73,75].includes(code) ? "❄" : [95,96,99].includes(code) ? "ϟ" : "☂";
+  async function loadWeather() {
+    try {
+      const url = "https://api.open-meteo.com/v1/forecast?latitude=49.5897&longitude=11.0119&timezone=Europe%2FBerlin&current=temperature_2m,weather_code,precipitation,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=4";
+      const r = await fetch(url); if (!r.ok) throw new Error(); const w = await r.json(), c = w.current, d = w.daily;
+      $("#weatherTemp").textContent = Math.round(c.temperature_2m) + "°";
+      $("#weatherSummary").textContent = weatherText(c.weather_code);
+      $(".weather-icon").textContent = weatherIcon(c.weather_code);
+      $("#weatherRain").textContent = "Rain " + (c.precipitation_probability ?? d.precipitation_probability_max[0] ?? 0) + "%";
+      $("#weatherHighLow").textContent = "Today " + Math.round(d.temperature_2m_max[0]) + "° / " + Math.round(d.temperature_2m_min[0]) + "°";
+      $("#weatherForecast").innerHTML = d.time.slice(1).map((day,i)=>'<div><small>'+new Date(day+"T12:00:00").toLocaleDateString("en",{weekday:"short"})+'</small><span>'+weatherIcon(d.weather_code[i+1])+'</span><b>'+Math.round(d.temperature_2m_max[i+1])+'°</b></div>').join("");
+    } catch { $("#weatherSummary").textContent = "Forecast temporarily unavailable"; }
+  }
+  async function loadGitActivity() {
+    try {
+      const r = await fetch("https://api.github.com/repos/mherub004/Dashboard/commits?per_page=4"); if (!r.ok) throw new Error();
+      const commits = await r.json();
+      $("#gitActivity").innerHTML = commits.map(c=>'<a class="feed-item" href="'+escape(c.html_url)+'" target="_blank" rel="noopener noreferrer"><i class="feed-dot"></i><span><b>'+escape((c.commit.message.split("\n")[0]||"Commit").slice(0,90))+'</b><small>'+escape(c.commit.author?.name||"GitHub")+" · "+escape(new Date(c.commit.author?.date||Date.now()).toLocaleDateString())+'</small></span><code>'+escape(c.sha.slice(0,7))+'</code></a>').join("") || empty("No recent commits found.");
+    } catch { $("#gitActivity").innerHTML = '<div class="empty">GitHub activity is temporarily unavailable.</div>'; }
+  }
+  function renderCalendar() {
+    const month = state.calendarMonth, year = month.getFullYear(), m = month.getMonth();
+    $("#calendarMonth").textContent = month.toLocaleDateString("en",{month:"long",year:"numeric"});
+    const first = (new Date(year,m,1).getDay()+6)%7, count = new Date(year,m+1,0).getDate(), nowDate = new Date(), today = nowDate.getFullYear()+"-"+String(nowDate.getMonth()+1).padStart(2,"0")+"-"+String(nowDate.getDate()).padStart(2,"0");
+    $("#calendarDays").innerHTML = Array.from({length:Math.ceil((first+count)/7)*7},(_,i)=>{
+      const day=i-first+1; if(day<1||day>count)return '<span class="calendar-blank"></span>';
+      const date=year+"-"+String(m+1).padStart(2,"0")+"-"+String(day).padStart(2,"0");
+      return '<button type="button" class="calendar-day'+(date===state.selectedDate?" selected":"")+(date===today?" today":"")+(state.notes[date]?" has-note":"")+'" data-date="'+date+'">'+day+'</button>';
+    }).join("");
+    $("#noteDateLabel").textContent = new Date(state.selectedDate+"T12:00:00").toLocaleDateString("en",{weekday:"long",month:"long",day:"numeric",year:"numeric"});
+    $("#dayNote").value = state.notes[state.selectedDate] || "";
+  }
+  function renderFeatures(d) {
+    const sites=d.websites||[];
+    $("#shortcutGrid").innerHTML=sites.length?sites.map((s,i)=>'<a class="shortcut" href="'+escape(s.url)+'" target="_blank" rel="noopener noreferrer"><span class="shortcut-icon tone-'+(i%4)+'">'+escape((s.name||"↗").slice(0,1).toUpperCase())+'</span><b>'+escape(s.name)+'</b><small><i class="dot '+tone(s.status)+'"></i>'+escape(s.status)+'</small></a>').join(""):empty("Add websites in Manage setup to build your launcher.");
+    const h=d.host;
+    $("#storagePercent").textContent=h?Math.round(h.disk)+"%":"—";
+    $("#storageUsed").textContent=h?bytes(h.disk_used)+" used":"Waiting for server";
+    $("#storageTotal").textContent=h?bytes(h.disk_total)+" total · OS filesystem":"Disk usage updates with server telemetry.";
+    $("#storageRing").style.setProperty("--used",h?Math.min(100,h.disk)+"%":"0%");
+    $("#backupStatus").textContent="No backup report from agent";
+    if(!state.extrasLoaded){state.extrasLoaded=true;renderCalendar();loadWeather();loadGitActivity();api("notes").then(x=>{state.notes=x.notes||{};renderCalendar()}).catch(()=>{});}
+  }
   function setView() {
     const view = location.hash.slice(1);
-    state.view = ["websites", "containers", "services"].includes(view) ? view : "overview";
-    const titles = { overview: "Overview", websites: "Websites & domains", containers: "Docker containers", services: "Services" };
+    state.view = ["websites", "containers", "services", "planner"].includes(view) ? view : "overview";
+    const titles = { overview: "Overview", websites: "Websites & domains", containers: "Docker containers", services: "Services", planner: "Calendar & notes" };
     $$(".nav-item").forEach(a => a.classList.toggle("active", a.dataset.view === state.view));
     $("#crumb").textContent = titles[state.view];
     $("#pageTitle").innerHTML = state.view === "overview" ? "Your infrastructure, <span>in focus.</span>" : escape(titles[state.view]) + " <span>at a glance.</span>";
-    $("#pageSubtitle").textContent = state.view === "overview" ? "Everything running behind your work. Right now." : { websites: "Know when your websites are reachable.", containers: "A clear view of every workload on your server.", services: "Keep your infrastructure services organized." }[state.view];
-    $("#overviewView").classList.toggle("hidden", state.view !== "overview"); $("#listView").classList.toggle("hidden", state.view === "overview");
+    $("#pageSubtitle").textContent = state.view === "overview" ? "Everything running behind your work. Right now." : { websites: "Know when your websites are reachable.", containers: "A clear view of every workload on your server.", services: "Keep your infrastructure services organized.", planner: "Plan ahead and keep notes for each day." }[state.view];
+    $("#overviewView").classList.toggle("hidden", !["overview", "planner"].includes(state.view)); $("#listView").classList.toggle("hidden", ["overview", "planner"].includes(state.view));
+    $(".feature-grid > .panel").forEach(panel => panel.classList.toggle("hidden", state.view === "planner" && !panel.classList.contains("planner-panel")));
     $("#sidebar").classList.remove("open"); $("#mobileMenu").setAttribute("aria-expanded", "false");
     renderList(); requestAnimationFrame(drawChart);
   }
   function renderList() {
-    if (state.view === "overview") return;
+    if (["overview", "planner"].includes(state.view)) return;
     const config = {
       websites: ["MONITORED ENDPOINTS", "Websites & domains", "Public HTTP checks run while this dashboard is open.", "＋ Add website"],
       containers: ["DOCKER RUNTIME", "Containers", "Container status and resource usage from your latest server report.", ""],
@@ -216,6 +262,10 @@
     if (action === "account") { $("#passwordError").textContent = ""; $("#passwordForm").reset(); show("#accountDialog"); }
   });
   $("#refresh").addEventListener("click", refresh);
+  $("#monthPrev").addEventListener("click",()=>{state.calendarMonth=new Date(state.calendarMonth.getFullYear(),state.calendarMonth.getMonth()-1,1);renderCalendar()});
+  $("#monthNext").addEventListener("click",()=>{state.calendarMonth=new Date(state.calendarMonth.getFullYear(),state.calendarMonth.getMonth()+1,1);renderCalendar()});
+  $("#calendarDays").addEventListener("click",e=>{const day=e.target.closest("[data-date]");if(!day)return;state.selectedDate=day.dataset.date;renderCalendar()});
+  $("#saveNote").addEventListener("click",async()=>{const note=$("#dayNote").value.trim();try{await api("notes",{method:"PUT",body:JSON.stringify({date:state.selectedDate,note})});if(note)state.notes[state.selectedDate]=note;else delete state.notes[state.selectedDate];renderCalendar();toast("Note saved");}catch(e){toast(e.message)}});
   $("#mobileMenu").addEventListener("click", () => { const open = $("#sidebar").classList.toggle("open"); $("#mobileMenu").setAttribute("aria-expanded", String(open)); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); else clearTimeout(poll); });
   window.addEventListener("resize", drawChart); window.addEventListener("hashchange", setView);

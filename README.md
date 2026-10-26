@@ -90,6 +90,12 @@ For local Pages development, use Wrangler with a local D1 database and local sec
 
 This deployment uses Cloudflare Pages and D1 with free-tier usage in mind. No paid subscription or paid API is required by the code. Free tiers have quotas, and your server, domain and payment processing costs are separate. This is a monitoring foundation, not a guarantee of zero operating costs at arbitrary scale.
 
+## Personal dashboard tools
+
+The overview includes an Open-Meteo forecast for Erlangen, shortcuts and availability checks for configured websites, and recent public commits from this repository. The calendar stores dated notes in the private D1 database behind the admin session. GitHub activity is public repository metadata and is fetched from the browser. The storage card reports the monitored host's OS filesystem usage.
+
+VPN peer details and backup history are not collected by the current host agent. Their cards show setup or reporting status and do not infer that peers or backups are healthy.
+
 ## Docker troubleshooting
 
 If host CPU, memory, disk and network appear but containers do not, the agent is reaching the dashboard and its Docker socket is the part that needs fixing.
