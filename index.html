@@ -7,17 +7,19 @@
 <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/style.css?v=light-network-2"><script src="/assets/app.js?v=light-network-2" defer></script>
+<link rel="stylesheet" href="/assets/style.css?v=ui-polish-1"><script src="/assets/app.js?v=ui-polish-1" defer></script>
 </head>
-<body>
+<body class="auth-pending">
 <div class="ambient"></div>
+<div class="session-wait" id="sessionWait" role="status" aria-live="polite"><span class="session-wait-mark">M</span><span>Opening your private dashboard…</span></div>
+<button class="sidebar-scrim" id="sidebarScrim" type="button" aria-label="Close navigation"></button>
 <aside class="sidebar" id="sidebar">
 <a class="brand" href="#overview"><span class="brand-mark">↗</span><span>MTech <span class="brand-secondary">Infra</span><small>SERVER DASHBOARD</small></span></a>
 <div class="workspace"><span class="workspace-icon">A</span><div><b>Ahsan's workspace</b><small>Personal infrastructure</small></div><span class="muted">⌄</span></div>
 <div class="nav-label">WORKSPACE</div>
 <nav aria-label="Main navigation">
 <a href="#overview" class="nav-item active" data-view="overview"><span>◫</span>Overview</a>
-<button class="nav-item admin-nav-item" type="button" data-action="account"><span>⚙</span>Admin & security</button>
+<button class="nav-item admin-nav-item" type="button" data-action="account" aria-haspopup="dialog" aria-controls="accountDialog"><span>⚙</span>Admin & security</button>
 <a href="#websites" class="nav-item" data-view="websites"><span>◎</span>Websites <em id="siteCount">0</em></a>
 <a href="#containers" class="nav-item" data-view="containers"><span>▦</span>Containers</a>
 <a href="#network" class="nav-item" data-view="network"><span>⌁</span>Home network</a>
@@ -49,7 +51,7 @@
 <section class="panel"><div class="panel-head"><div><div class="section-kicker">YOUR STACK</div><h2>Services</h2></div><button class="quiet-button" id="addService">＋ Add</button></div><div id="serviceList"><div class="empty">Add your infrastructure services.</div></div><div class="panel-note">Service status is maintained by you.</div></section>
 </div>
 
-<section class="feature-grid" aria-label="Personal dashboard tools">
+<section class="feature-grid" id="featureGrid" aria-label="Personal dashboard tools">
 <article class="panel weather-panel"><div class="panel-head"><div><div class="section-kicker">ERLANGEN · LIVE WEATHER</div><h2>Outside right now</h2></div><span class="feature-icon weather-icon">☀</span></div><div class="weather-main"><strong id="weatherTemp">—°</strong><span id="weatherSummary">Loading local forecast…</span></div><div class="weather-meta"><span id="weatherRain">Rain —</span><span id="weatherHighLow">Today — / —</span></div><div class="forecast-strip" id="weatherForecast"></div></article>
 <article class="panel shortcuts-panel"><div class="panel-head"><div><div class="section-kicker">YOUR HOMEPAGE</div><h2>Quick launch</h2></div><a href="#websites" class="panel-link">Manage →</a></div><div class="shortcut-grid" id="shortcutGrid"><div class="empty">Add websites to create shortcuts.</div></div></article>
 <article class="panel git-panel"><div class="panel-head"><div><div class="section-kicker">GITHUB · PUBLIC ACTIVITY</div><h2>Latest commits</h2></div><a href="https://github.com/mherub004/Dashboard/commits/main" target="_blank" rel="noopener noreferrer" class="panel-link">Repository →</a></div><div id="gitActivity" class="feed-list"><div class="empty">Loading repository activity…</div></div></article>
@@ -82,7 +84,7 @@
 <footer><span><b>MTech <span class="accent">Infra</span></b> Your server at a glance.</span><span>PRIVATE WORKSPACE <i>·</i> YOUR INFRASTRUCTURE</span></footer>
 </div>
 </main>
-<dialog id="loginDialog" open><div class="modal-content"><div class="modal-emblem">✳</div><div class="section-kicker">WELCOME BACK</div><h2>Sign in to your workspace</h2><p>Your infrastructure is private. Sign in to continue.</p><form id="loginForm"><label>Username<input name="username" autocomplete="username" value="admin" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><p class="form-error" id="loginError" role="alert"></p><button class="button primary full" type="submit">Sign in →</button></form><div class="modal-note">A private view of everything you run.</div></div></dialog>
+<dialog id="loginDialog"><div class="modal-content"><div class="modal-emblem">✳</div><div class="section-kicker">WELCOME BACK</div><h2>Sign in to your workspace</h2><p>Your infrastructure is private. Sign in to continue.</p><form id="loginForm"><label>Username<input name="username" autocomplete="username" value="admin" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><p class="form-error" id="loginError" role="alert"></p><button class="button primary full" type="submit">Sign in →</button></form><div class="modal-note">A private view of everything you run.</div></div></dialog>
 <dialog id="editorDialog"><div class="modal-content"><button class="close" data-close aria-label="Close editor">×</button><div class="section-kicker">WORKSPACE EDITOR</div><h2>Manage your setup</h2><p>Add websites, domains and the services behind your work.</p><div class="tabs"><button class="tab active" data-tab="websites" type="button">Websites & domains</button><button class="tab" data-tab="services" type="button">Services</button></div><form id="editorForm"><div id="editorRows"></div><button class="add-row" id="editorAdd" type="button">＋ Add website</button><p class="form-error" id="editorError" role="alert"></p><div class="modal-actions"><button class="button quiet" data-close type="button">Cancel</button><button class="button primary" type="submit">Save changes</button></div></form></div></dialog>
 <dialog id="connectDialog"><div class="modal-content"><button class="close" data-close aria-label="Close connection instructions">×</button><div class="section-kicker">SERVER CONNECTION</div><h2>Meet your infrastructure</h2><p>Run the agent on your Linux Docker server. It sends metrics here every 30 seconds over HTTPS.</p><ol class="setup-steps"><li>Clone the repository on your server.<pre>git clone https://github.com/mherub004/Dashboard.git
 cd Dashboard

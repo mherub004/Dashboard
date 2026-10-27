@@ -288,3 +288,46 @@ footer{border-color:#e1e8f0;color:#728198}footer b{color:#405571}.network-info{b
 .dns-help{padding:16px 19px;line-height:1.6;color:#62758b}
 .lan-vpn-help{background:linear-gradient(120deg,#f0f7ff,#f7f4ff)}
 @media(max-width:600px){.speed-gauges{gap:15px}.speed-ring{width:78px;height:78px}.speed-context{max-width:90px}.network-grid>.panel{padding:14px}}
+
+
+/* Workspace polish: responsive navigation, clear account surfaces, and quick view changes. */
+.auth-pending .sidebar,
+.auth-pending main { visibility: hidden; }
+.session-wait { display: none; }
+.auth-pending .session-wait {
+  position: fixed; inset: 0; z-index: 100; display: grid; place-content: center;
+  justify-items: center; gap: 13px; color: #5e6f86; font-size: 13px;
+  background: radial-gradient(ellipse at 50% 35%, #e8f3ff 0, transparent 44%), #f3f7fd;
+}
+.session-wait-mark {
+  width: 42px; height: 42px; display: grid; place-items: center; border-radius: 14px;
+  color: #fff; font: 800 18px var(--head); background: linear-gradient(135deg,#59b6a0,#7d83df);
+  box-shadow: 0 8px 22px #688bc52e;
+}
+.sidebar { z-index: 6; }
+.sidebar nav { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.nav-item { min-height: 42px; transition: background-color .14s ease,color .14s ease,transform .14s ease; }
+.nav-item:active { transform: scale(.985); }
+.sidebar-scrim { display: none; }
+.view-enter { animation: view-enter .17s cubic-bezier(.2,.75,.25,1) both; }
+@keyframes view-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+dialog { border-radius: 18px; box-shadow: 0 26px 90px #253d5a2b; }
+#loginDialog,#accountDialog { width: min(500px,calc(100% - 28px)); }
+#loginDialog .modal-content,#accountDialog .modal-content { padding: clamp(25px,5vw,38px); }
+#loginDialog .modal-content h2,#accountDialog .modal-content h2 { color: #23364e; font-size: clamp(22px,4vw,27px); letter-spacing: -.8px; }
+#loginDialog .modal-content>p,#accountDialog .modal-content>p { max-width: 42ch; color: #72829a; font-size: 12px; }
+#loginDialog .modal-emblem,#accountDialog .modal-emblem { background: linear-gradient(135deg,#e4f5ee,#ecebff); color: #398c79; }
+#loginDialog label,#accountDialog label { color: #51637a; font-size: 11px; font-weight: 600; }
+#loginDialog input,#accountDialog input { height: 43px; border-radius: 9px; background: #f8faff; border-color: #dce5f0; color: #25374f; }
+#loginDialog .button.primary,#accountDialog .button.primary { height: 43px; border-radius: 9px; background: linear-gradient(100deg,#48b58e,#5f9ed4); color: #fff; box-shadow: 0 7px 16px #4b9d8a25; }
+#loginDialog .button.primary:hover,#accountDialog .button.primary:hover { filter: brightness(1.04); }
+#accountDialog .close { color: #73839a; }
+.modal-note { color: #7c8ba0; border-color: #e6ebf3; }
+@media(max-width:850px) {
+  .sidebar { width: min(290px,86vw); height: 100dvh; padding-bottom: max(16px,env(safe-area-inset-bottom)); }
+  body.sidebar-open .sidebar-scrim {
+    display: block; position: fixed; inset: 0; z-index: 5; border: 0; padding: 0;
+    background: #23395435; backdrop-filter: blur(2px);
+  }
+}
+@media(prefers-reduced-motion:reduce) { .view-enter { animation: none; } }

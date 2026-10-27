@@ -19,6 +19,16 @@
   const status = s => '<span class="status ' + tone(s) + '"><i class="dot ' + tone(s) + '"></i>' + escape(s) + "</span>";
   const empty = text => '<div class="empty">' + escape(text) + "</div>";
   const show = id => { const dialog = $(id); if (!dialog.open) dialog.showModal(); };
+  const setSidebar = open => {
+    $("#sidebar").classList.toggle("open", open);
+    document.body.classList.toggle("sidebar-open", open);
+    $("#mobileMenu").setAttribute("aria-expanded", String(open));
+    $("#mobileMenu").setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+  };
+  function revealDashboard() {
+    document.body.classList.remove("auth-pending");
+    $("#sessionWait").hidden = true;
+  }
   const toast = message => { $("#toast").textContent = message; $("#toast").classList.add("visible"); clearTimeout(toastTimer); toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), 3500); };
   async function api(path, options = {}) {
     const response = await fetch("/api/" + path, { ...options, credentials: "same-origin", headers: { ...(options.body ? { "Content-Type": "application/json" } : {}), ...options.headers } });
@@ -27,6 +37,7 @@
     return data;
   }
   function signInScreen() {
+    revealDashboard();
     state.authenticated = false; clearTimeout(poll);
     $$("dialog[open]").forEach(d => d.close());
     $("#loginForm").elements.password.value = "";
@@ -79,7 +90,7 @@
     $("#chartEmpty").classList.toggle("hidden", state.history.length > 0);
     $("#chartNote").textContent = h ? bytes(h.disk_used) + " of " + bytes(h.disk_total) + " disk used · " + h.disk.toFixed(0) + "% · network: " + (h.network.interfaces || "host") : "Connect your server to start collecting telemetry.";
     if (state.history.length) $("#chartStart").textContent = new Date(state.history[0].at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    drawChart(); renderNetwork(d);
+    if (state.view === "overview") drawChart(); renderNetwork(d);
     const sites = d.websites || [], up = sites.filter(s => s.status === "Online").length;
     $("#siteCount").textContent = sites.length;
     $("#healthPercent").textContent = sites.length ? Math.round(up / sites.length * 100) + "%" : "—";
@@ -95,6 +106,7 @@
     renderList();
   }
   function renderNetwork(d) {
+    if (!["network", "dns"].includes(state.view)) return;
     const h=d.host, net=h?.network||{}, dns=d.dns||{};
     $("#networkDown").textContent=bytes(net.down); $("#networkUp").textContent=bytes(net.up);
     $("#networkChartStart").textContent=state.networkHistory.length?new Date(state.networkHistory[0].at*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}):"Waiting for telemetry";
@@ -135,7 +147,8 @@
     }
     $("#networkVpnCount").textContent=Array.isArray(peers)?String(peers.length):"—";
     $("#networkPeerRows").innerHTML=Array.isArray(peers)&&peers.length?peers.map(p=>{const r=state.peerRates[p.ip||p.name]||{};return "<tr><td>"+escape(p.name)+"</td><td>"+escape(p.ip||"—")+"</td><td>"+escape(p.last_seen?new Date(p.last_seen).toLocaleString():"Never")+"</td><td>"+bytes(p.received)+"</td><td>"+bytes(p.sent)+"</td><td class=network-down>"+(r.received==null?"—":bytes(r.received)+"/s")+"</td><td class=network-up>"+(r.sent==null?"—":bytes(r.sent)+"/s")+"</td><td><span class=network-badge>"+(p.online?"Recent handshake":"Inactive")+"</span></td></tr>";}).join(""):'<tr><td colspan="8" class="network-empty">No WireGuard peers reported. Check that the agent is rebuilt with WIREGUARD_CONTAINER=wg-easy.</td></tr>';
-    drawNetworkChart(); drawDnsChart(dns);
+    if (state.view === "network") drawNetworkChart();
+    else if (state.view === "dns") drawDnsChart(dns);
   }
   function drawNetworkChart() {
     const canvas=$("#networkChart"),rect=canvas.getBoundingClientRect();if(!rect.width||!rect.height)return;
@@ -219,17 +232,41 @@
     if(!state.extrasLoaded){state.extrasLoaded=true;renderCalendar();loadWeather();loadGitActivity();api("notes").then(x=>{state.notes=x.notes||{};renderCalendar()}).catch(()=>{});}
   }
   function setView() {
-    const view = location.hash.slice(1);
-    state.view = ["websites", "containers", "services", "network", "dns", "planner"].includes(view) ? view : "overview";
+    const requestedView = location.hash.slice(1);
+    const knownViews = ["websites", "containers", "services", "network", "dns", "planner"];
+    state.view = knownViews.includes(requestedView) ? requestedView : "overview";
     const titles = { overview: "Overview", websites: "Websites & domains", containers: "Docker containers", services: "Services", network: "Home network", dns: "DNS activity", planner: "Calendar & notes" };
-    $$(".nav-item").forEach(a => a.classList.toggle("active", a.dataset.view === state.view));
+    $$(".nav-item[data-view]").forEach(item => {
+      const active = item.dataset.view === state.view;
+      item.classList.toggle("active", active);
+      if (item.tagName === "A") {
+        if (active) item.setAttribute("aria-current", "page");
+        else item.removeAttribute("aria-current");
+      }
+    });
     $("#crumb").textContent = titles[state.view];
     $("#pageTitle").innerHTML = state.view === "overview" ? "Your infrastructure, <span>in focus.</span>" : escape(titles[state.view]) + " <span>at a glance.</span>";
     $("#pageSubtitle").textContent = state.view === "overview" ? "Everything running behind your work. Right now." : { websites: "Know when your websites are reachable.", containers: "A clear view of every workload on your server.", services: "Keep your infrastructure services organized.", planner: "Plan ahead and keep notes for each day.", network: "Home LAN status, live link speed and WireGuard peer usage.", dns: "AdGuard Home query history, clients, and top domains." }[state.view];
-    $("#overviewView").classList.toggle("hidden", !["overview", "planner"].includes(state.view)); $("#listView").classList.toggle("hidden", ["overview", "planner", "network", "dns"].includes(state.view)); $("#networkView").classList.toggle("hidden", state.view !== "network"); $("#dnsView").classList.toggle("hidden", state.view !== "dns");
-    $(".feature-grid > .panel").forEach(panel => panel.classList.toggle("hidden", state.view === "planner" && !panel.classList.contains("planner-panel")));
-    $("#sidebar").classList.remove("open"); $("#mobileMenu").setAttribute("aria-expanded", "false");
-    renderList(); requestAnimationFrame(()=>{drawChart();drawNetworkChart();drawDnsChart(state.data?.dns||{})});
+    const overview = state.view === "overview";
+    const planner = state.view === "planner";
+    const list = ["websites", "containers", "services"].includes(state.view);
+    $("#overviewView").classList.toggle("hidden", !overview);
+    $("#featureGrid").classList.toggle("hidden", !overview && !planner);
+    $("#featureGrid > .panel").forEach(panel => panel.classList.toggle("hidden", planner && !panel.classList.contains("planner-panel")));
+    $("#listView").classList.toggle("hidden", !list);
+    $("#networkView").classList.toggle("hidden", state.view !== "network");
+    $("#dnsView").classList.toggle("hidden", state.view !== "dns");
+    setSidebar(false);
+    if (list) renderList();
+    const visible = overview ? [$("#overviewView"), $("#featureGrid")] : planner ? [$("#featureGrid")] : [list ? $("#listView") : state.view === "network" ? $("#networkView") : $("#dnsView")];
+    visible.forEach(section => {
+      section.classList.remove("view-enter");
+      requestAnimationFrame(() => section.classList.add("view-enter"));
+    });
+    requestAnimationFrame(() => {
+      if (state.view === "overview") drawChart();
+      else if (state.data && ["network", "dns"].includes(state.view)) renderNetwork(state.data);
+    });
   }
   function renderList() {
     if (["overview", "planner"].includes(state.view)) return;
@@ -238,6 +275,7 @@
       containers: ["DOCKER RUNTIME", "Containers", "Container status and resource usage from your latest server report.", ""],
       services: ["YOUR STACK", "Services", "Service descriptions and status are managed by you.", "＋ Add service"]
     }[state.view];
+    if (!config) return;
     $("#listKicker").textContent = config[0]; $("#listTitle").textContent = config[1]; $("#listDescription").textContent = config[2]; $("#listAdd").textContent = config[3]; $("#listAdd").classList.toggle("hidden", !config[3]);
     const rows = state.data?.[state.view] || [];
     if (!rows.length) { $("#listTable").innerHTML = empty(state.view === "containers" ? "No containers to display. Connect your agent and check Docker access." : "Nothing here yet. Add your first entry."); return; }
@@ -334,13 +372,15 @@
   $("#monthNext").addEventListener("click",()=>{state.calendarMonth=new Date(state.calendarMonth.getFullYear(),state.calendarMonth.getMonth()+1,1);renderCalendar()});
   $("#calendarDays").addEventListener("click",e=>{const day=e.target.closest("[data-date]");if(!day)return;state.selectedDate=day.dataset.date;renderCalendar()});
   $("#saveNote").addEventListener("click",async()=>{const note=$("#dayNote").value.trim();try{await api("notes",{method:"PUT",body:JSON.stringify({date:state.selectedDate,note})});if(note)state.notes[state.selectedDate]=note;else delete state.notes[state.selectedDate];renderCalendar();toast("Note saved");}catch(e){toast(e.message)}});
-  $("#mobileMenu").addEventListener("click", () => { const open = $("#sidebar").classList.toggle("open"); $("#mobileMenu").setAttribute("aria-expanded", String(open)); });
+  $("#mobileMenu").addEventListener("click", () => setSidebar(!$("#sidebar").classList.contains("open")));
+  $("#sidebarScrim").addEventListener("click", () => setSidebar(false));
+  document.addEventListener("keydown", event => { if (event.key === "Escape" && $("#sidebar").classList.contains("open")) setSidebar(false); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); else clearTimeout(poll); });
-  window.addEventListener("resize",()=>{drawChart();drawNetworkChart();drawDnsChart(state.data?.dns||{})}); window.addEventListener("hashchange", setView);
+  window.addEventListener("resize",()=>{if(state.view==="overview")drawChart();if(state.view==="network")drawNetworkChart();if(state.view==="dns")drawDnsChart(state.data?.dns||{})}); window.addEventListener("hashchange", setView);
   $("#today").textContent = new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(new Date()).toUpperCase();
   setView();
   (async () => {
-    try { const user = await api("session"); if (user.authenticated) { $("#loginDialog").close(); state.authenticated = true; await refresh(); } else signInScreen(); }
+    try { const user = await api("session"); if (user.authenticated) { revealDashboard(); if ($("#loginDialog").open) $("#loginDialog").close(); state.authenticated = true; await refresh(); } else signInScreen(); }
     catch (error) { signInScreen(); $("#loginError").textContent = error.message; }
   })();
 })();
