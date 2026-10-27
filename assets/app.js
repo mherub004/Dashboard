@@ -247,7 +247,7 @@
     const list = ["websites", "containers", "services"].includes(state.view);
     $("#overviewView").classList.toggle("hidden", !overview);
     $("#featureGrid").classList.toggle("hidden", !overview && !planner);
-    $("#featureGrid > .panel").forEach(panel => panel.classList.toggle("hidden", planner && !panel.classList.contains("planner-panel")));
+    $$("#featureGrid > .panel").forEach(panel => panel.classList.toggle("hidden", planner && !panel.classList.contains("planner-panel")));
     $("#listView").classList.toggle("hidden", !list);
     $("#networkView").classList.toggle("hidden", state.view !== "network");
     $("#dnsView").classList.toggle("hidden", state.view !== "dns");
