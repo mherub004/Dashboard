@@ -7,7 +7,7 @@
 <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/style.css?v=ui-polish-2"><script src="/assets/app.js?v=ui-polish-2" defer></script>
+<link rel="stylesheet" href="/assets/style.css?v=ui-polish-3"><script src="/assets/app.js?v=ui-polish-3" defer></script>
 </head>
 <body>
 <div class="ambient"></div>
@@ -18,7 +18,7 @@
 <div class="nav-label">WORKSPACE</div>
 <nav aria-label="Main navigation">
 <a href="#overview" class="nav-item active" data-view="overview"><span>◫</span>Overview</a>
-<button class="nav-item admin-nav-item" type="button" data-action="account" aria-haspopup="dialog" aria-controls="accountDialog"><span>⚙</span>Admin & security</button>
+<a href="#admin" class="nav-item admin-nav-item" data-view="admin" aria-controls="adminView"><span>⚙</span>Admin console</a>
 <a href="#websites" class="nav-item" data-view="websites"><span>◎</span>Websites <em id="siteCount">0</em></a>
 <a href="#containers" class="nav-item" data-view="containers"><span>▦</span>Containers</a>
 <a href="#network" class="nav-item" data-view="network"><span>⌁</span>Home network</a>
@@ -80,6 +80,13 @@
 <div class="network-grid dns-view-grid"><article class="panel network-dns-panel"><div class="panel-head"><div><div class="section-kicker">ADGUARD HOME</div><h2>DNS activity</h2></div><span class="network-live" id="dnsAvailability">NOT CONFIGURED</span></div><div class="dns-total-row"><div><small>QUERIES</small><b id="dnsQueries">—</b></div><div><small>BLOCKED</small><b id="dnsBlocked">—</b></div></div><div class="dns-chart-wrap"><canvas id="dnsChart" aria-label="DNS query volume over time"></canvas></div><div class="dns-top-title">TOP QUERIED DOMAINS</div><div id="dnsDomains" class="dns-domain-list"></div></article><article class="panel network-wide"><div class="panel-head"><div><div class="section-kicker">ADGUARD HOME · RECENT ACTIVITY</div><h2>Recent DNS requests <span class="count" id="queryLogCount">0</span></h2></div><span class="network-live" id="queryLogStatus">WAITING</span></div><div class="network-table-scroll"><table class="network-table"><thead><tr><th>TIME</th><th>DOMAIN REQUESTED</th><th>CLIENT IP</th><th>RESULT</th></tr></thead><tbody id="queryLogRows"></tbody></table></div><p class="network-note">DNS requests show domains looked up by devices; they do not prove a page was opened. Devices using private DNS may not appear here.</p></article>
 <article class="panel network-wide dns-help"><div class="panel-head"><div><div class="section-kicker">USE ADGUARD OVER WIREGUARD</div><h2>DNS setup</h2></div></div><p>Set the WireGuard client’s DNS server to the AdGuard server address shown in the Home network page. Confirm AdGuard Home accepts DNS from VPN clients. Devices using private DNS or DoH may not appear in this request list.</p></article>
 </div></section>
+<section id="adminView" class="hidden">
+<div class="admin-page-head"><div><div class="section-kicker">ADMIN CONSOLE</div><h2>Manage your workspace</h2><p>Update the websites and services shown on your dashboard, and manage account access.</p></div><span class="admin-access-chip"><i></i> Private workspace</span></div>
+<div class="admin-console-grid">
+<article class="panel admin-manage-panel"><div class="admin-panel-icon admin-manage-icon">✦</div><div class="section-kicker">WORKSPACE CONTENT</div><h2>Websites & services</h2><p>Add, edit or remove the websites, domains and services displayed across your dashboard.</p><div class="admin-action-stack"><button class="button primary admin-action-button" id="manageWebsites" type="button"><span>Manage websites & domains</span><b>→</b></button><button class="button secondary admin-action-button" id="manageServices" type="button"><span>Manage services</span><b>→</b></button></div><div class="admin-panel-foot"><span>Changes are saved to your private workspace.</span></div></article>
+<article class="panel admin-security-panel"><div class="admin-panel-icon admin-security-icon">⌑</div><div class="section-kicker">ACCOUNT SECURITY</div><h2>Signed in as admin</h2><p>Your login screen appears whenever you sign out. Your current password stays the same unless you submit a new one here.</p><form id="passwordForm"><label>Current password<input name="current_password" type="password" autocomplete="current-password" required></label><label>New password<input name="new_password" type="password" autocomplete="new-password" minlength="16" maxlength="128" required></label><label>Confirm new password<input name="confirm_password" type="password" autocomplete="new-password" minlength="16" required></label><p class="form-error" id="passwordError" role="alert"></p><button class="button primary full" type="submit">Update password</button></form><div class="admin-signout-row"><span>Finished managing your dashboard?</span><button class="text-button" id="logout" type="button">Sign out →</button></div></article>
+</div>
+</section>
 <footer><span><b>MTech <span class="accent">Infra</span></b> Your server at a glance.</span><span>PRIVATE WORKSPACE <i>·</i> YOUR INFRASTRUCTURE</span></footer>
 </div>
 </main>
@@ -89,7 +96,6 @@
 cd Dashboard
 cp .env.example .env</pre></li><li>Copy your connection settings into <code>.env</code>.<label>Agent token<input id="agentToken" type="password" readonly autocomplete="off"></label><button class="button quiet" id="copyAgent" type="button">Copy connection settings</button></li><li>Set <code>DOCKER_GID</code> from this command, then start the agent.<pre>stat -c '%g' /var/run/docker.sock
 docker compose up -d --build</pre></li></ol><div class="modal-note">The token grants permission to send telemetry. Keep it private. No public server port is needed. Open the dashboard at https://dashboard.iamahsan.org; the server IP itself does not host the dashboard website.</div></div></dialog>
-<dialog id="accountDialog"><div class="modal-content"><button class="close" data-close aria-label="Close account settings">×</button><div class="section-kicker">ADMIN ACCOUNT</div><h2>Keep your workspace yours</h2><p>Change your password here. Updating it signs out all sessions.</p><form id="passwordForm"><label>Current password<input name="current_password" type="password" autocomplete="current-password" required></label><label>New password<input name="new_password" type="password" autocomplete="new-password" minlength="16" maxlength="128" required></label><label>Confirm new password<input name="confirm_password" type="password" autocomplete="new-password" minlength="16" required></label><p class="form-error" id="passwordError" role="alert"></p><button class="button primary full" type="submit">Update password</button></form><div class="modal-note"><button class="text-button" id="logout" type="button">Sign out →</button></div></div></dialog>
 <div id="toast" role="status"></div>
 </body>
 </html>

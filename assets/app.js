@@ -228,9 +228,9 @@
   }
   function setView() {
     const requestedView = location.hash.slice(1);
-    const knownViews = ["websites", "containers", "services", "network", "dns", "planner"];
+    const knownViews = ["websites", "containers", "services", "network", "dns", "planner", "admin"];
     state.view = knownViews.includes(requestedView) ? requestedView : "overview";
-    const titles = { overview: "Overview", websites: "Websites & domains", containers: "Docker containers", services: "Services", network: "Home network", dns: "DNS activity", planner: "Calendar & notes" };
+    const titles = { overview: "Overview", websites: "Websites & domains", containers: "Docker containers", services: "Services", network: "Home network", dns: "DNS activity", planner: "Calendar & notes", admin: "Admin console" };
     $$(".nav-item[data-view]").forEach(item => {
       const active = item.dataset.view === state.view;
       item.classList.toggle("active", active);
@@ -241,7 +241,7 @@
     });
     $("#crumb").textContent = titles[state.view];
     $("#pageTitle").innerHTML = state.view === "overview" ? "Your infrastructure, <span>in focus.</span>" : escape(titles[state.view]) + " <span>at a glance.</span>";
-    $("#pageSubtitle").textContent = state.view === "overview" ? "Everything running behind your work. Right now." : { websites: "Know when your websites are reachable.", containers: "A clear view of every workload on your server.", services: "Keep your infrastructure services organized.", planner: "Plan ahead and keep notes for each day.", network: "Home LAN status, live link speed and WireGuard peer usage.", dns: "AdGuard Home query history, clients, and top domains." }[state.view];
+    $("#pageSubtitle").textContent = state.view === "overview" ? "Everything running behind your work. Right now." : { websites: "Know when your websites are reachable.", containers: "A clear view of every workload on your server.", services: "Keep your infrastructure services organized.", planner: "Plan ahead and keep notes for each day.", network: "Home LAN status, live link speed and WireGuard peer usage.", dns: "AdGuard Home query history, clients, and top domains.", admin: "Manage dashboard content and account access." }[state.view];
     const overview = state.view === "overview";
     const planner = state.view === "planner";
     const list = ["websites", "containers", "services"].includes(state.view);
@@ -251,9 +251,10 @@
     $("#listView").classList.toggle("hidden", !list);
     $("#networkView").classList.toggle("hidden", state.view !== "network");
     $("#dnsView").classList.toggle("hidden", state.view !== "dns");
+    $("#adminView").classList.toggle("hidden", state.view !== "admin");
     setSidebar(false);
     if (list) renderList();
-    const visible = overview ? [$("#overviewView"), $("#featureGrid")] : planner ? [$("#featureGrid")] : [list ? $("#listView") : state.view === "network" ? $("#networkView") : $("#dnsView")];
+    const visible = overview ? [$("#overviewView"), $("#featureGrid")] : planner ? [$("#featureGrid")] : state.view === "admin" ? [$("#adminView")] : [list ? $("#listView") : state.view === "network" ? $("#networkView") : $("#dnsView")];
     visible.forEach(section => {
       section.classList.remove("view-enter");
       requestAnimationFrame(() => section.classList.add("view-enter"));
@@ -333,6 +334,8 @@
     readDraft(); state.draft[state.tab].splice(Number(remove.dataset.remove), 1); drawEditor();
   });
   $$(".tab").forEach(tab => tab.addEventListener("click", () => { readDraft(); state.tab = tab.dataset.tab; drawEditor(); }));
+  $("#manageWebsites").addEventListener("click", () => openEditor("websites"));
+  $("#manageServices").addEventListener("click", () => openEditor("services"));
   $("#addService").addEventListener("click", () => openEditor("services"));
   $("#listAdd").addEventListener("click", () => openEditor(state.view === "services" ? "services" : "websites"));
   $("#copyAgent").addEventListener("click", async () => {
@@ -360,7 +363,7 @@
     const action = event.target.closest("[data-action]")?.dataset.action;
     if (action === "manage") openEditor();
     if (action === "connect") openConnection();
-    if (action === "account") { $("#passwordError").textContent = ""; $("#passwordForm").reset(); show("#accountDialog"); }
+    if (action === "account") location.hash = "#admin";
   });
   $("#refresh").addEventListener("click", refresh);
   $("#monthPrev").addEventListener("click",()=>{state.calendarMonth=new Date(state.calendarMonth.getFullYear(),state.calendarMonth.getMonth()-1,1);renderCalendar()});
