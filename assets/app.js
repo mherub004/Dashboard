@@ -25,10 +25,6 @@
     $("#mobileMenu").setAttribute("aria-expanded", String(open));
     $("#mobileMenu").setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
   };
-  function revealDashboard() {
-    document.body.classList.remove("auth-pending");
-    $("#sessionWait").hidden = true;
-  }
   const toast = message => { $("#toast").textContent = message; $("#toast").classList.add("visible"); clearTimeout(toastTimer); toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), 3500); };
   async function api(path, options = {}) {
     const response = await fetch("/api/" + path, { ...options, credentials: "same-origin", headers: { ...(options.body ? { "Content-Type": "application/json" } : {}), ...options.headers } });
@@ -37,7 +33,6 @@
     return data;
   }
   function signInScreen() {
-    revealDashboard();
     state.authenticated = false; clearTimeout(poll);
     $$("dialog[open]").forEach(d => d.close());
     $("#loginForm").elements.password.value = "";
@@ -379,8 +374,14 @@
   window.addEventListener("resize",()=>{if(state.view==="overview")drawChart();if(state.view==="network")drawNetworkChart();if(state.view==="dns")drawDnsChart(state.data?.dns||{})}); window.addEventListener("hashchange", setView);
   $("#today").textContent = new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(new Date()).toUpperCase();
   setView();
+  show("#loginDialog");
   (async () => {
-    try { const user = await api("session"); if (user.authenticated) { revealDashboard(); if ($("#loginDialog").open) $("#loginDialog").close(); state.authenticated = true; await refresh(); } else signInScreen(); }
-    catch (error) { signInScreen(); $("#loginError").textContent = error.message; }
+    try {
+      const user = await api("session");
+      if (user.authenticated) { if ($("#loginDialog").open) $("#loginDialog").close(); state.authenticated = true; await refresh(); }
+      else if (!state.authenticated) $("#loginError").textContent = "";
+    } catch (error) {
+      if (!state.authenticated) $("#loginError").textContent = error.message;
+    }
   })();
 })();

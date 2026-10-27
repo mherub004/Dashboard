@@ -291,19 +291,6 @@ footer{border-color:#e1e8f0;color:#728198}footer b{color:#405571}.network-info{b
 
 
 /* Workspace polish: responsive navigation, clear account surfaces, and quick view changes. */
-.auth-pending .sidebar,
-.auth-pending main { visibility: hidden; }
-.session-wait { display: none; }
-.auth-pending .session-wait {
-  position: fixed; inset: 0; z-index: 100; display: grid; place-content: center;
-  justify-items: center; gap: 13px; color: #5e6f86; font-size: 13px;
-  background: radial-gradient(ellipse at 50% 35%, #e8f3ff 0, transparent 44%), #f3f7fd;
-}
-.session-wait-mark {
-  width: 42px; height: 42px; display: grid; place-items: center; border-radius: 14px;
-  color: #fff; font: 800 18px var(--head); background: linear-gradient(135deg,#59b6a0,#7d83df);
-  box-shadow: 0 8px 22px #688bc52e;
-}
 .sidebar { z-index: 6; }
 .sidebar nav { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .nav-item { min-height: 42px; transition: background-color .14s ease,color .14s ease,transform .14s ease; }
